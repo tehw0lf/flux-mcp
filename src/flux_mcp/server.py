@@ -33,7 +33,9 @@ async def list_tools() -> list[Tool]:
             description=(
                 "Generate an image using FLUX.1-dev model. "
                 "Creates high-quality images from text prompts. "
-                "Images are saved to the configured output directory."
+                "Images are saved to the configured output directory. "
+                "Defaults are optimized for maximum quality: 40 steps, guidance_scale 7. "
+                "Use lower values (steps=28, guidance_scale=3.5) for faster previews."
             ),
             inputSchema={
                 "type": "object",
@@ -44,12 +46,12 @@ async def list_tools() -> list[Tool]:
                     },
                     "steps": {
                         "type": "integer",
-                        "description": "Number of inference steps (default: 40, recommended: 20-50)",
+                        "description": "Number of inference steps. Default 40 for high quality. Use 28 for faster previews. Range: 20-50",
                         "default": 40,
                     },
                     "guidance_scale": {
                         "type": "number",
-                        "description": "Guidance scale for generation (default: 7, recommended: 1.0-10.0)",
+                        "description": "Guidance scale for prompt adherence. Default 7 for strong adherence. Use 3.5 for faster/looser results. Range: 1.0-10.0",
                         "default": 7,
                     },
                     "width": {
