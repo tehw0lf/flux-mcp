@@ -99,7 +99,9 @@ def cli():
     is_flag=True,
     help="Verbose output with debug info",
 )
-def generate(prompt, steps, guidance, width, height, seed, output, output_dir, interactive, verbose):
+def generate(
+    prompt, steps, guidance, width, height, seed, output, output_dir, interactive, verbose
+):
     """Generate an image from a text prompt.
 
     Examples:
@@ -138,7 +140,7 @@ def generate(prompt, steps, guidance, width, height, seed, output, output_dir, i
     # Validate prompt
     if not prompt:
         console.print("[red]✗ Error: Prompt is required[/red]")
-        console.print("\nUsage: flux generate \"your prompt here\"")
+        console.print('\nUsage: flux generate "your prompt here"')
         console.print("   or: flux generate --interactive")
         sys.exit(1)
 
@@ -155,7 +157,9 @@ def generate(prompt, steps, guidance, width, height, seed, output, output_dir, i
     )
 
 
-def _generate_image(prompt, steps, guidance, width, height, seed, output_path, verbose, generator=None):
+def _generate_image(
+    prompt, steps, guidance, width, height, seed, output_path, verbose, generator=None
+):
     """Internal function to generate a single image."""
     # Create generator if not provided (for single-shot mode)
     if generator is None:
@@ -242,11 +246,13 @@ def _generate_image(prompt, steps, guidance, width, height, seed, output_path, v
 
 def _interactive_mode():
     """Interactive mode for batch generation."""
-    console.print(Panel.fit(
-        "🎨 [bold cyan]FLUX Image Generator[/bold cyan] - Interactive Mode\n"
-        "[dim]Generate multiple images with the same loaded model[/dim]",
-        border_style="cyan"
-    ))
+    console.print(
+        Panel.fit(
+            "🎨 [bold cyan]FLUX Image Generator[/bold cyan] - Interactive Mode\n"
+            "[dim]Generate multiple images with the same loaded model[/dim]",
+            border_style="cyan",
+        )
+    )
 
     # Create generator once for entire session
     generator = FluxGenerator(auto_unload=False)
@@ -309,7 +315,9 @@ def _interactive_mode():
 
         # Ask to continue
         console.print()
-        continue_input = console.input("[bold]Generate another image?[/bold] [dim][y/N][/dim]: ").strip().lower()
+        continue_input = (
+            console.input("[bold]Generate another image?[/bold] [dim][y/N][/dim]: ").strip().lower()
+        )
         if continue_input not in ("y", "yes"):
             console.print("\n[dim]Goodbye![/dim]")
             break
@@ -346,6 +354,7 @@ def status():
         table.add_row("Model Cache", str(config.model_cache))
     else:
         from pathlib import Path
+
         default_cache = Path.home() / ".cache" / "huggingface" / "hub"
         table.add_row("Model Cache", f"{default_cache} [dim](default)[/dim]")
 

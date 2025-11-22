@@ -15,15 +15,10 @@ class Config:
     def __init__(self):
         """Initialize configuration from environment variables."""
         # Model unload timeout in seconds (default: 5 minutes)
-        self.unload_timeout: int = int(
-            os.getenv("FLUX_UNLOAD_TIMEOUT", "300")
-        )
+        self.unload_timeout: int = int(os.getenv("FLUX_UNLOAD_TIMEOUT", "300"))
 
         # Output directory for generated images
-        output_dir = os.getenv(
-            "FLUX_OUTPUT_DIR",
-            str(Path.home() / "flux_output")
-        )
+        output_dir = os.getenv("FLUX_OUTPUT_DIR", str(Path.home() / "flux_output"))
         self.output_dir: Path = Path(output_dir)
 
         # HuggingFace model cache directory (optional)

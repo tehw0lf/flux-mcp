@@ -15,8 +15,7 @@ from .generator import FluxGenerator
 
 # Set up logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -131,22 +130,17 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
 
             # Validate parameters
             if not prompt.strip():
-                return [TextContent(
-                    type="text",
-                    text="Error: Prompt cannot be empty"
-                )]
+                return [TextContent(type="text", text="Error: Prompt cannot be empty")]
 
             if steps < 1 or steps > 100:
-                return [TextContent(
-                    type="text",
-                    text="Error: Steps must be between 1 and 100"
-                )]
+                return [TextContent(type="text", text="Error: Steps must be between 1 and 100")]
 
             if width < 256 or width > 2048 or height < 256 or height > 2048:
-                return [TextContent(
-                    type="text",
-                    text="Error: Width and height must be between 256 and 2048"
-                )]
+                return [
+                    TextContent(
+                        type="text", text="Error: Width and height must be between 256 and 2048"
+                    )
+                ]
 
             # Generate image
             logger.info(f"Generating image: {prompt[:50]}...")
@@ -181,29 +175,26 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
 🖼️  Thumbnail: {thumb_path}
 🎲 Seed: {used_seed}
 ⚙️ Settings:
-  - Steps: {settings['steps']}
-  - Guidance Scale: {settings['guidance_scale']}
-  - Resolution: {settings['width']}x{settings['height']}
-  - Generation Time: {settings['generation_time']}
+  - Steps: {settings["steps"]}
+  - Guidance Scale: {settings["guidance_scale"]}
+  - Resolution: {settings["width"]}x{settings["height"]}
+  - Generation Time: {settings["generation_time"]}
 
 💡 Use the same seed to reproduce this image.
 📌 A {thumbnail_size[0]}x{thumbnail_size[1]} thumbnail is shown below for instant preview.
 """
             return [
                 TextContent(type="text", text=response),
-                ImageContent(
-                    type="image",
-                    data=thumbnail_data,
-                    mimeType="image/png"
-                )
+                ImageContent(type="image", data=thumbnail_data, mimeType="image/png"),
             ]
 
         elif name == "unload_model":
             generator.unload_model()
-            return [TextContent(
-                type="text",
-                text="✅ FLUX model unloaded successfully. GPU memory freed."
-            )]
+            return [
+                TextContent(
+                    type="text", text="✅ FLUX model unloaded successfully. GPU memory freed."
+                )
+            ]
 
         elif name == "get_status":
             status = generator.get_status()
@@ -212,29 +203,29 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
             if status["model_loaded"]:
                 status_msg = f"""🟢 FLUX Model Status: LOADED
 
-⏱️  Time until auto-unload: {status['time_until_unload']}
-⚙️  Auto-unload timeout: {status['timeout_seconds']}s
-📅 Last access: {status['last_access']}
+⏱️  Time until auto-unload: {status["time_until_unload"]}
+⚙️  Auto-unload timeout: {status["timeout_seconds"]}s
+📅 Last access: {status["last_access"]}
 """
                 if status["vram_usage"]:
                     vram = status["vram_usage"]
                     status_msg += f"""
 🎮 VRAM Usage:
-  - Allocated: {vram['allocated_gb']} GB
-  - Reserved: {vram['reserved_gb']} GB
+  - Allocated: {vram["allocated_gb"]} GB
+  - Reserved: {vram["reserved_gb"]} GB
 """
             else:
                 status_msg = f"""🔴 FLUX Model Status: NOT LOADED
 
-⚙️  Auto-unload timeout: {status['timeout_seconds']}s
+⚙️  Auto-unload timeout: {status["timeout_seconds"]}s
 💡 Model will load automatically on next generation request.
 """
                 if status["vram_usage"]:
                     vram = status["vram_usage"]
                     status_msg += f"""
 🎮 VRAM Usage:
-  - Allocated: {vram['allocated_gb']} GB
-  - Reserved: {vram['reserved_gb']} GB
+  - Allocated: {vram["allocated_gb"]} GB
+  - Reserved: {vram["reserved_gb"]} GB
 """
 
             return [TextContent(type="text", text=status_msg)]
@@ -243,10 +234,11 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
             timeout_seconds = arguments["timeout_seconds"]
 
             if timeout_seconds < 0:
-                return [TextContent(
-                    type="text",
-                    text="Error: Timeout must be non-negative (0 to disable)"
-                )]
+                return [
+                    TextContent(
+                        type="text", text="Error: Timeout must be non-negative (0 to disable)"
+                    )
+                ]
 
             config.update_timeout(timeout_seconds)
 
@@ -258,17 +250,11 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
             return [TextContent(type="text", text=msg)]
 
         else:
-            return [TextContent(
-                type="text",
-                text=f"Error: Unknown tool '{name}'"
-            )]
+            return [TextContent(type="text", text=f"Error: Unknown tool '{name}'")]
 
     except Exception as e:
         logger.error(f"Error in tool '{name}': {e}", exc_info=True)
-        return [TextContent(
-            type="text",
-            text=f"Error: {str(e)}"
-        )]
+        return [TextContent(type="text", text=f"Error: {str(e)}")]
 
 
 async def async_main():
@@ -278,16 +264,13 @@ async def async_main():
     logger.info(f"Auto-unload timeout: {config.unload_timeout}s")
 
     async with stdio_server() as (read_stream, write_stream):
-        await app.run(
-            read_stream,
-            write_stream,
-            app.create_initialization_options()
-        )
+        await app.run(read_stream, write_stream, app.create_initialization_options())
 
 
 def main():
     """Entry point for the MCP server."""
     import asyncio
+
     asyncio.run(async_main())
 
 

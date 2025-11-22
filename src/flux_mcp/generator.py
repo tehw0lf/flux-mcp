@@ -1,6 +1,7 @@
 """FLUX image generator with auto-unload functionality."""
 
 import gc
+import json
 import logging
 import threading
 import time
@@ -10,6 +11,7 @@ from pathlib import Path
 import torch
 from diffusers import FluxPipeline
 from PIL import Image
+from PIL.PngImagePlugin import PngInfo
 
 from .config import config
 
@@ -78,10 +80,7 @@ class FluxGenerator:
             return
 
         logger.debug(f"Scheduling auto-unload in {config.unload_timeout}s")
-        self._unload_timer = threading.Timer(
-            config.unload_timeout,
-            self._auto_unload
-        )
+        self._unload_timer = threading.Timer(config.unload_timeout, self._auto_unload)
         self._unload_timer.daemon = True
         self._unload_timer.start()
 
@@ -173,11 +172,36 @@ class FluxGenerator:
             # Get the generated PIL Image
             pil_image = result.images[0]
 
-            # Save image
+            # Prepare metadata
+            timestamp_iso = datetime.now().isoformat()
+            metadata_dict = {
+                "prompt": prompt,
+                "seed": seed,
+                "steps": steps,
+                "guidance_scale": guidance_scale,
+                "width": width,
+                "height": height,
+                "model": config.model_id,
+                "generation_time_seconds": round(gen_time, 2),
+                "timestamp": timestamp_iso,
+            }
+
+            # Create PNG metadata
+            png_info = PngInfo()
+            png_info.add_text("parameters", json.dumps(metadata_dict, indent=2))
+            # Add individual fields for compatibility with various tools
+            png_info.add_text("prompt", prompt)
+            png_info.add_text("seed", str(seed))
+            png_info.add_text("steps", str(steps))
+            png_info.add_text("guidance_scale", str(guidance_scale))
+            png_info.add_text("model", config.model_id)
+            png_info.add_text("timestamp", timestamp_iso)
+
+            # Save image with embedded metadata
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{timestamp}_{seed}.png"
             output_path = config.output_dir / filename
-            pil_image.save(output_path)
+            pil_image.save(output_path, pnginfo=png_info)
 
             logger.info(f"Image generated in {gen_time:.2f}s: {output_path}")
 
