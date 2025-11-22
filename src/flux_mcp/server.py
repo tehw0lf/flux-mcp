@@ -142,7 +142,44 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
                     )
                 ]
 
-            # Generate image
+            # Get progress token if provided
+            progress_token = None
+            if hasattr(app, "request_context") and app.request_context:
+                meta = getattr(app.request_context, "meta", None)
+                if meta:
+                    progress_token = getattr(meta, "progressToken", None)
+
+            # Create progress callback for MCP
+            async def send_progress(current_step: int, total_steps: int):
+                if progress_token:
+                    try:
+                        # Send progress notification to client
+                        await app.request_context.session.send_progress_notification(
+                            progress_token=progress_token,
+                            progress=current_step,
+                            total=total_steps,
+                        )
+                        logger.debug(f"Progress: {current_step}/{total_steps}")
+                    except Exception as e:
+                        logger.warning(f"Failed to send progress notification: {e}")
+
+            # Wrapper to make async callback work with sync generator
+            def progress_wrapper(current_step: int, total_steps: int):
+                import asyncio
+
+                try:
+                    # Get or create event loop
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # We're in an async context, create a task
+                        asyncio.create_task(send_progress(current_step, total_steps))
+                    else:
+                        # Run the coroutine
+                        loop.run_until_complete(send_progress(current_step, total_steps))
+                except Exception as e:
+                    logger.debug(f"Could not send progress: {e}")
+
+            # Generate image with progress reporting
             logger.info(f"Generating image: {prompt[:50]}...")
             output_path, used_seed, settings, pil_image = generator.generate(
                 prompt=prompt,
@@ -151,6 +188,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
                 width=width,
                 height=height,
                 seed=seed,
+                progress_callback=progress_wrapper if progress_token else None,
             )
 
             # Create thumbnail (512x512) for instant preview

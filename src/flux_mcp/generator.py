@@ -1,5 +1,7 @@
 """FLUX image generator with auto-unload functionality."""
 
+from __future__ import annotations
+
 import gc
 import json
 import logging
@@ -7,6 +9,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 
 import torch
 from diffusers import FluxPipeline
@@ -126,6 +129,7 @@ class FluxGenerator:
         width: int = 1024,
         height: int = 1024,
         seed: int | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> tuple[Path, int, dict, Image.Image]:
         """Generate an image from a text prompt.
 
@@ -136,6 +140,7 @@ class FluxGenerator:
             width: Image width in pixels (default: 1024)
             height: Image height in pixels (default: 1024)
             seed: Random seed for reproducibility (default: random)
+            progress_callback: Optional callback function(step, total_steps) for progress updates
 
         Returns:
             Tuple of (output_path, seed_used, generation_settings, pil_image)
@@ -157,6 +162,13 @@ class FluxGenerator:
             # Set up generator for reproducibility
             generator = torch.Generator(device="cuda").manual_seed(seed)
 
+            # Create callback wrapper for diffusers pipeline
+            def step_callback(pipe, step_index, timestep, callback_kwargs):
+                if progress_callback:
+                    # Call user's progress callback with current step and total
+                    progress_callback(step_index + 1, steps)
+                return callback_kwargs
+
             # Generate image
             start_time = time.time()
             result = self.pipeline(
@@ -166,6 +178,7 @@ class FluxGenerator:
                 width=width,
                 height=height,
                 generator=generator,
+                callback_on_step_end=step_callback if progress_callback else None,
             )
             gen_time = time.time() - start_time
 
