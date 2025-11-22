@@ -44,13 +44,13 @@ async def list_tools() -> list[Tool]:
                     },
                     "steps": {
                         "type": "integer",
-                        "description": "Number of inference steps (default: 28, recommended: 20-50)",
-                        "default": 28,
+                        "description": "Number of inference steps (default: 40, recommended: 20-50)",
+                        "default": 40,
                     },
                     "guidance_scale": {
                         "type": "number",
-                        "description": "Guidance scale for generation (default: 3.5, recommended: 1.0-10.0)",
-                        "default": 3.5,
+                        "description": "Guidance scale for generation (default: 7, recommended: 1.0-10.0)",
+                        "default": 7,
                     },
                     "width": {
                         "type": "integer",
@@ -122,8 +122,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
         if name == "generate_image":
             # Extract parameters
             prompt = arguments["prompt"]
-            steps = arguments.get("steps", 28)
-            guidance_scale = arguments.get("guidance_scale", 3.5)
+            steps = arguments.get("steps", 40)
+            guidance_scale = arguments.get("guidance_scale", 7)
             width = arguments.get("width", 1024)
             height = arguments.get("height", 1024)
             seed = arguments.get("seed")
