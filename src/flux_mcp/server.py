@@ -31,11 +31,10 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="generate_image",
             description=(
-                "Generate an image using FLUX models. "
-                "Two models available: FLUX.1-dev (fast previews, 4-8 steps) and FLUX.2-dev (high quality, 50 steps). "
-                "Images are saved to the configured output directory. "
-                "For FLUX.2-dev: Use 50 steps + guidance 7.5 for quality, or 28 steps + guidance 3.5 for faster. "
-                "For FLUX.1-dev: Use 4-8 steps for very fast previews."
+                "Generate high-quality images using FLUX models. "
+                "Two models available: FLUX.1-dev (faster, 40 steps default) and FLUX.2-dev (highest quality, 50 steps default). "
+                "Both models are optimized for quality output. "
+                "Images are saved to the configured output directory with embedded metadata."
             ),
             inputSchema={
                 "type": "object",
@@ -46,14 +45,13 @@ async def list_tools() -> list[Tool]:
                     },
                     "model": {
                         "type": "string",
-                        "description": "Model to use: 'flux1-dev' (fast preview, 2-5min) or 'flux2-dev' (quality, 30-40min on 16GB GPU). Default: flux2-dev",
+                        "description": "Model to use: 'flux1-dev' (faster quality, ~4-8 min) or 'flux2-dev' (highest quality, ~30-40 min on 16GB). Both optimized for quality. Default: flux2-dev",
                         "enum": ["flux1-dev", "flux2-dev"],
                         "default": "flux2-dev",
                     },
                     "steps": {
                         "type": "integer",
-                        "description": "Number of inference steps. FLUX.2: 50 (quality) or 28 (faster). FLUX.1: 4-8 (fast). Range: 4-100",
-                        "default": 50,
+                        "description": "Number of inference steps. Model-specific defaults: FLUX.1-dev=40, FLUX.2-dev=50. Range: 20-100",
                     },
                     "guidance_scale": {
                         "type": "number",

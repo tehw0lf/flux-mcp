@@ -37,8 +37,15 @@ class Config:
             "flux2-dev": "black-forest-labs/FLUX.2-dev",
         }
 
+        # Model-specific optimal quality defaults (based on testing)
+        # Both are optimized for high quality output
+        self.model_defaults = {
+            "black-forest-labs/FLUX.1-dev": {"steps": 40, "guidance": 7.5},
+            "black-forest-labs/FLUX.2-dev": {"steps": 50, "guidance": 7.5},
+        }
+
         # Default generation parameters (can be overridden via env vars)
-        # These are optimized for FLUX.2-dev, FLUX.1-dev works better with lower values
+        # Falls back to FLUX.2-dev defaults if not specified
         self.default_steps: int = int(os.getenv("FLUX_DEFAULT_STEPS", "50"))
         self.default_guidance: float = float(os.getenv("FLUX_DEFAULT_GUIDANCE", "7.5"))
 

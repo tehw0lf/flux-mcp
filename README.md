@@ -47,14 +47,16 @@ For detailed setup and configuration, see the sections below.
 
 ## Model Comparison
 
-| Model | Use Case | Speed (16GB GPU) | Speed (24GB+ GPU) | Quality | Recommended Steps |
-|-------|----------|------------------|-------------------|---------|-------------------|
-| **FLUX.1-dev** | Fast previews, iteration | 2-5 min | 1-2 min | Good | 4-8 |
-| **FLUX.2-dev** | Production, final output | 30-40 min | 2-4 min | Excellent | 50 (quality) or 28 (faster) |
+Both models are optimized for **high-quality** output with tested parameters:
+
+| Model | Speed (16GB GPU) | Speed (24GB+ GPU) | Quality | Default Steps | Default Guidance |
+|-------|------------------|-------------------|---------|---------------|------------------|
+| **FLUX.1-dev** | 4-8 min | 1-2 min | Excellent | 40 | 7.5 |
+| **FLUX.2-dev** | 30-40 min | 2-4 min | Maximum | 50 | 7.5 |
 
 **When to use which:**
-- **FLUX.1-dev**: Quick iterations, testing prompts, previews, batch generation
-- **FLUX.2-dev**: Final high-quality images, production work, when quality matters most
+- **FLUX.1-dev**: When you need high quality faster (~4-8 min), batch generation, iterating on ideas
+- **FLUX.2-dev**: When you need absolute maximum quality and time isn't critical (~30-40 min)
 
 **VRAM Modes (automatic selection):**
 - **24GB+** - Full GPU mode (fastest, both models < 5 min)
@@ -103,12 +105,12 @@ FLUX_OUTPUT_DIR=/path/to/flux_output
 # FLUX_MODEL_CACHE=/path/to/cache
 
 # Model selection (choose default model)
-# FLUX_MODEL_ID=black-forest-labs/FLUX.1-dev   # Fast previews (2-5 min)
-# FLUX_MODEL_ID=black-forest-labs/FLUX.2-dev   # High quality (default, 30-40 min on 16GB)
+# FLUX_MODEL_ID=black-forest-labs/FLUX.1-dev   # Faster quality (4-8 min, 40 steps default)
+# FLUX_MODEL_ID=black-forest-labs/FLUX.2-dev   # Maximum quality (default, 30-40 min, 50 steps)
 
-# Default generation parameters
-# FLUX_DEFAULT_STEPS=50        # FLUX.2: 50 (quality) or 28 (faster), FLUX.1: 4-8 (fast)
-# FLUX_DEFAULT_GUIDANCE=7.5    # Default: 7.5 (strong adherence), use 3.0-4.0 for looser
+# Default generation parameters (model-specific smart defaults apply automatically)
+# FLUX_DEFAULT_STEPS=50        # Override auto defaults: FLUX.1-dev=40, FLUX.2-dev=50
+# FLUX_DEFAULT_GUIDANCE=7.5    # Both models use 7.5 for optimal quality
 ```
 
 ## MCP Server Registration
@@ -320,24 +322,24 @@ Generate an image from a text prompt using FLUX.1-dev (fast) or FLUX.2-dev (qual
 
 **Parameters:**
 - `prompt` (required): Text description of the image
-- `model` (optional): "flux1-dev" (fast preview) or "flux2-dev" (quality, default)
-- `steps` (optional): Number of inference steps (FLUX.2: 50 default, FLUX.1: 4-8, range: 4-100)
-- `guidance_scale` (optional): Guidance scale (default: 7.5, range: 1.0-10.0)
+- `model` (optional): "flux1-dev" (faster quality, 40 steps) or "flux2-dev" (maximum quality, 50 steps, default)
+- `steps` (optional): Number of inference steps (auto: FLUX.1=40, FLUX.2=50, range: 20-100)
+- `guidance_scale` (optional): Guidance scale (default: 7.5 for both models, range: 1.0-10.0)
 - `width` (optional): Image width in pixels (default: 1024, range: 256-2048)
 - `height` (optional): Image height in pixels (default: 1024, range: 256-2048)
 - `seed` (optional): Random seed for reproducibility (random if not provided)
 
 **Example Usage (natural language with MCP client):**
 ```
-Generate a preview image with flux1-dev of a futuristic cyberpunk city at sunset with neon lights
+Generate a high quality image with flux1-dev of a futuristic cyberpunk city at sunset with neon lights
 ```
 
 ```
-Generate a high quality image with flux2-dev and seed 42 of a serene mountain landscape
+Generate maximum quality image with flux2-dev and seed 42 of a serene mountain landscape
 ```
 
 ```
-Generate a fast preview with flux1-dev using 6 steps: portrait of a cat
+Generate with flux1-dev: portrait of a cat (uses 40 steps, 7.5 guidance automatically)
 ```
 
 ### 2. `unload_model`

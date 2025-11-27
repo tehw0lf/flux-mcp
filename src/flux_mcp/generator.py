@@ -216,11 +216,12 @@ class FluxGenerator:
             # Update last access time
             self._last_access = datetime.now()
 
-            # Use config defaults if not specified
+            # Use model-specific smart defaults if not specified
+            current_model_defaults = config.model_defaults.get(self._current_model_id, {})
             if steps is None:
-                steps = config.default_steps
+                steps = current_model_defaults.get("steps", config.default_steps)
             if guidance_scale is None:
-                guidance_scale = config.default_guidance
+                guidance_scale = current_model_defaults.get("guidance", config.default_guidance)
 
             # Generate random seed if not provided
             if seed is None:
