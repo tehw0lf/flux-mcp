@@ -35,7 +35,7 @@ def validate_dimensions(ctx, param, value):
 @click.group()
 @click.version_option(version="0.1.0", prog_name="flux")
 def cli():
-    """FLUX.1-dev CLI - Generate images locally with FLUX."""
+    """FLUX.2-dev CLI - Generate images locally with FLUX."""
     pass
 
 
@@ -44,16 +44,16 @@ def cli():
 @click.option(
     "--steps",
     "-s",
-    default=28,
+    default=None,
     type=int,
-    help="Number of inference steps (default: 28)",
+    help=f"Number of inference steps (default: {config.default_steps} from config)",
 )
 @click.option(
     "--guidance",
     "-g",
-    default=3.5,
+    default=None,
     type=float,
-    help="Guidance scale (default: 3.5)",
+    help=f"Guidance scale (default: {config.default_guidance} from config)",
 )
 @click.option(
     "--width",
@@ -272,11 +272,11 @@ def _interactive_mode():
 
         # Get parameters with defaults
         try:
-            steps_input = console.input("[bold]Steps[/bold] [dim][28][/dim]: ").strip()
-            steps = int(steps_input) if steps_input else 28
+            steps_input = console.input("[bold]Steps[/bold] [dim][50][/dim]: ").strip()
+            steps = int(steps_input) if steps_input else 50
 
-            guidance_input = console.input("[bold]Guidance scale[/bold] [dim][3.5][/dim]: ").strip()
-            guidance = float(guidance_input) if guidance_input else 3.5
+            guidance_input = console.input("[bold]Guidance scale[/bold] [dim][4.0][/dim]: ").strip()
+            guidance = float(guidance_input) if guidance_input else 4.0
 
             width_input = console.input("[bold]Width[/bold] [dim][1024][/dim]: ").strip()
             width = int(width_input) if width_input else 1024

@@ -26,7 +26,11 @@ class Config:
         self.model_cache: Path | None = Path(cache_dir) if cache_dir else None
 
         # Model configuration
-        self.model_id: str = "black-forest-labs/FLUX.1-dev"
+        self.model_id: str = "black-forest-labs/FLUX.2-dev"
+
+        # Default generation parameters (can be overridden via env vars)
+        self.default_steps: int = int(os.getenv("FLUX_DEFAULT_STEPS", "50"))
+        self.default_guidance: float = float(os.getenv("FLUX_DEFAULT_GUIDANCE", "7.5"))
 
         # Ensure output directory exists
         self.output_dir.mkdir(parents=True, exist_ok=True)

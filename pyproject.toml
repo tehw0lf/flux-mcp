@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "flux-mcp"
 version = "0.1.0"
-description = "MCP Server for FLUX.1-dev image generation with auto-unload"
+description = "MCP Server for FLUX.2-dev image generation with auto-unload"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -34,6 +34,7 @@ dependencies = [
     "protobuf>=5.0.0",
     "click>=8.3.0",
     "rich>=14.2.0",
+    "optimum-quanto>=0.2.0",
 ]
 
 [project.optional-dependencies]
@@ -77,6 +78,9 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+
+[tool.uv.sources]
+diffusers = { git = "https://github.com/huggingface/diffusers.git" }
 
 [dependency-groups]
 dev = [

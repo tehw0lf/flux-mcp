@@ -31,11 +31,11 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="generate_image",
             description=(
-                "Generate an image using FLUX.1-dev model. "
+                "Generate an image using FLUX.2-dev model. "
                 "Creates high-quality images from text prompts. "
                 "Images are saved to the configured output directory. "
-                "Defaults are optimized for maximum quality: 40 steps, guidance_scale 7. "
-                "Use lower values (steps=28, guidance_scale=3.5) for faster previews."
+                "Defaults are optimized for maximum quality: 50 steps, guidance_scale 4.0. "
+                "Use lower values (steps=28, guidance_scale=3.0) for faster previews."
             ),
             inputSchema={
                 "type": "object",
@@ -46,13 +46,13 @@ async def list_tools() -> list[Tool]:
                     },
                     "steps": {
                         "type": "integer",
-                        "description": "Number of inference steps. Default 40 for high quality. Use 28 for faster previews. Range: 20-50",
-                        "default": 40,
+                        "description": "Number of inference steps. Default 50 for high quality. Use 28 for faster previews. Range: 20-100",
+                        "default": 50,
                     },
                     "guidance_scale": {
                         "type": "number",
-                        "description": "Guidance scale for prompt adherence. Default 7 for strong adherence. Use 3.5 for faster/looser results. Range: 1.0-10.0",
-                        "default": 7,
+                        "description": "Guidance scale for prompt adherence. Default 7.5 for strong adherence. Use 3.0-4.0 for faster/looser results. Range: 1.0-10.0",
+                        "default": 7.5,
                     },
                     "width": {
                         "type": "integer",
@@ -124,8 +124,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
         if name == "generate_image":
             # Extract parameters
             prompt = arguments["prompt"]
-            steps = arguments.get("steps", 40)
-            guidance_scale = arguments.get("guidance_scale", 7)
+            steps = arguments.get("steps", 50)
+            guidance_scale = arguments.get("guidance_scale", 4.0)
             width = arguments.get("width", 1024)
             height = arguments.get("height", 1024)
             seed = arguments.get("seed")

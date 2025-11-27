@@ -7,12 +7,12 @@ import json
 import logging
 import threading
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
 
 import torch
-from diffusers import FluxPipeline
+from diffusers import Flux2Pipeline
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class FluxGenerator:
-    """FLUX.1-dev image generator with lazy loading and auto-unload."""
+    """FLUX.2-dev image generator with lazy loading and auto-unload."""
 
     def __init__(self, auto_unload: bool = True):
         """Initialize the generator (model is not loaded yet).
@@ -31,7 +31,7 @@ class FluxGenerator:
             auto_unload: Enable automatic model unloading after timeout (default: True)
                         Set to False for CLI usage where process terminates anyway.
         """
-        self.pipeline: FluxPipeline | None = None
+        self.pipeline: Flux2Pipeline | None = None
         self._lock = threading.Lock()
         self._unload_timer: threading.Timer | None = None
         self._last_access: datetime | None = None
@@ -47,18 +47,58 @@ class FluxGenerator:
         logger.info(f"Loading FLUX model: {config.model_id}")
         start_time = time.time()
 
+        # Enable TF32 for faster matmul on Ampere+ GPUs
+        if torch.cuda.is_available():
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+            logger.info("Enabled TF32 for faster matrix operations")
+
         # Load the pipeline with bfloat16 for VRAM efficiency
-        self.pipeline = FluxPipeline.from_pretrained(
+        logger.info("Loading FLUX.2-dev with bfloat16 precision")
+        self.pipeline = Flux2Pipeline.from_pretrained(
             config.model_id,
             torch_dtype=torch.bfloat16,
             cache_dir=config.model_cache,
         )
 
-        # Enable sequential CPU offloading to reduce VRAM usage
-        # This aggressively moves model components to CPU/RAM when not actively in use
-        # Reduces VRAM from ~28GB to ~12GB for FLUX.1-dev
-        logger.info("Enabling sequential CPU offloading for VRAM optimization")
-        self.pipeline.enable_sequential_cpu_offload()
+        # Apply memory optimization based on available VRAM
+        if torch.cuda.is_available():
+            total_vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            logger.info(f"Detected {total_vram_gb:.1f}GB VRAM")
+
+            # VRAM requirements for FLUX.2-dev with bfloat16:
+            # - Full GPU: ~28GB (fastest)
+            # - Model CPU offload: ~20GB (balanced)
+            # - Sequential CPU offload: ~12GB (slower but fits in 16GB)
+
+            if total_vram_gb >= 24:
+                logger.info("Using full GPU mode (24GB+ VRAM) - fastest")
+                self.pipeline.to("cuda")
+            elif total_vram_gb >= 20:
+                logger.info(f"Using model CPU offload ({total_vram_gb:.1f}GB VRAM) - balanced")
+                self.pipeline.enable_model_cpu_offload()
+            else:
+                logger.info(
+                    f"Using sequential CPU offload ({total_vram_gb:.1f}GB VRAM) - fits in 16GB"
+                )
+                self.pipeline.enable_sequential_cpu_offload()
+
+            # Enable memory-efficient attention (flash attention if available, otherwise SDPA)
+            try:
+                self.pipeline.enable_xformers_memory_efficient_attention()
+                logger.info("Enabled xFormers memory-efficient attention")
+            except Exception:
+                # xFormers not available, try PyTorch's SDPA
+                try:
+                    # PyTorch 2.0+ has built-in scaled dot product attention
+                    if hasattr(torch.nn.functional, "scaled_dot_product_attention"):
+                        logger.info("Using PyTorch SDPA (scaled dot product attention)")
+                    else:
+                        logger.info("No accelerated attention available")
+                except Exception:
+                    logger.info("Using default attention mechanism")
+        else:
+            logger.warning("CUDA not available - loading to CPU (very slow)")
 
         load_time = time.time() - start_time
         logger.info(f"Model loaded successfully in {load_time:.2f}s")
@@ -124,8 +164,8 @@ class FluxGenerator:
     def generate(
         self,
         prompt: str,
-        steps: int = 28,
-        guidance_scale: float = 3.5,
+        steps: int | None = None,
+        guidance_scale: float | None = None,
         width: int = 1024,
         height: int = 1024,
         seed: int | None = None,
@@ -135,8 +175,8 @@ class FluxGenerator:
 
         Args:
             prompt: Text description of the image to generate
-            steps: Number of inference steps (default: 28)
-            guidance_scale: Guidance scale for generation (default: 3.5)
+            steps: Number of inference steps (default: from config, usually 50)
+            guidance_scale: Guidance scale for generation (default: from config, usually 7.5)
             width: Image width in pixels (default: 1024)
             height: Image height in pixels (default: 1024)
             seed: Random seed for reproducibility (default: random)
@@ -153,11 +193,19 @@ class FluxGenerator:
             # Update last access time
             self._last_access = datetime.now()
 
+            # Use config defaults if not specified
+            if steps is None:
+                steps = config.default_steps
+            if guidance_scale is None:
+                guidance_scale = config.default_guidance
+
             # Generate random seed if not provided
             if seed is None:
                 seed = torch.randint(0, 2**32 - 1, (1,)).item()
 
-            logger.info(f"Generating image with seed={seed}, steps={steps}")
+            logger.info(
+                f"Generating image with seed={seed}, steps={steps}, guidance={guidance_scale}"
+            )
 
             # Set up generator for reproducibility
             generator = torch.Generator(device="cuda").manual_seed(seed)

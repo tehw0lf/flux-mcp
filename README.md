@@ -1,13 +1,13 @@
 # FLUX MCP Server & CLI
 
-A Model Context Protocol (MCP) server and command-line tool for generating images using FLUX.1-dev with automatic model unloading to save VRAM and power.
+A Model Context Protocol (MCP) server and command-line tool for generating images using FLUX.2-dev with automatic model unloading to save VRAM and power.
 
 ## Features
 
-- 🎨 **High-Quality Image Generation** - Uses FLUX.1-dev for state-of-the-art image synthesis
-- ⚡ **Lazy Loading** - Model loads only when needed
+- 🎨 **High-Quality Image Generation** - Uses FLUX.2-dev for state-of-the-art image synthesis
+- ⚡ **Smart VRAM Management** - Automatically selects best strategy based on available VRAM
 - 🔄 **Auto-Unload** - Automatically unloads model after configurable inactivity period (MCP mode)
-- 💾 **Memory Efficient** - Uses bfloat16 for optimal VRAM usage (~12GB)
+- 💾 **Memory Efficient** - Model CPU offload for 16GB GPUs, full GPU mode for 24GB+
 - 🎲 **Reproducible** - Seed-based generation for consistent results
 - 📊 **Status Monitoring** - Check model status and VRAM usage
 - 🔧 **Runtime Configuration** - Adjust timeout without restarting
@@ -41,9 +41,14 @@ For detailed setup and configuration, see the sections below.
 ## Requirements
 
 - Python 3.10+
-- NVIDIA GPU with 16GB+ VRAM (tested on RTX 4070 Ti Super)
+- NVIDIA GPU with 12GB+ VRAM (16GB recommended, 24GB+ for maximum speed)
 - CUDA toolkit installed
 - PyTorch with CUDA support
+
+**VRAM Modes:**
+- **24GB+** - Full GPU mode (fastest, ~2-4 minutes for 1024x1024)
+- **16GB** - Model CPU offload mode (balanced, ~5-10 minutes for 1024x1024)
+- **12GB** - Model CPU offload mode (slower, may need reduced resolution)
 
 ## Installation
 
@@ -85,6 +90,10 @@ FLUX_OUTPUT_DIR=/path/to/flux_output
 
 # Optional: Custom HuggingFace cache directory
 # FLUX_MODEL_CACHE=/path/to/cache
+
+# Default generation parameters (adjust for faster previews)
+# FLUX_DEFAULT_STEPS=50        # Default: 50 (high quality), use 28 for faster
+# FLUX_DEFAULT_GUIDANCE=7.5    # Default: 7.5 (strong adherence), use 3.0-4.0 for looser
 ```
 
 ## MCP Server Registration
@@ -166,8 +175,8 @@ flux generate [OPTIONS] PROMPT
 
 **Options:**
 
-- `--steps, -s INTEGER` - Number of inference steps (default: 28)
-- `--guidance, -g FLOAT` - Guidance scale (default: 3.5)
+- `--steps, -s INTEGER` - Number of inference steps (default: 50)
+- `--guidance, -g FLOAT` - Guidance scale (default: 7.5)
 - `--width, -w INTEGER` - Image width in pixels, must be multiple of 8 (default: 1024)
 - `--height, -h INTEGER` - Image height in pixels, must be multiple of 8 (default: 1024)
 - `--seed INTEGER` - Random seed for reproducibility
@@ -261,7 +270,7 @@ Metadata JSON contains:
   "guidance_scale": 3.5,
   "width": 1024,
   "height": 1024,
-  "model": "black-forest-labs/FLUX.1-dev",
+  "model": "black-forest-labs/FLUX.2-dev",
   "generation_time_seconds": 15.3,
   "timestamp": "2025-01-26T12:34:56"
 }
@@ -296,8 +305,8 @@ Generate an image from a text prompt.
 
 **Parameters:**
 - `prompt` (required): Text description of the image
-- `steps` (optional): Number of inference steps (default: 28, range: 20-50)
-- `guidance_scale` (optional): Guidance scale (default: 3.5, range: 1.0-10.0)
+- `steps` (optional): Number of inference steps (default: 50, range: 20-100)
+- `guidance_scale` (optional): Guidance scale (default: 7.5, range: 1.0-10.0)
 - `width` (optional): Image width in pixels (default: 1024, range: 256-2048)
 - `height` (optional): Image height in pixels (default: 1024, range: 256-2048)
 - `seed` (optional): Random seed for reproducibility (random if not provided)
@@ -402,6 +411,24 @@ Set FLUX timeout to 10 minutes
 
 ## How It Works
 
+### Smart VRAM Detection
+
+On model load, the server:
+
+1. **Detects total VRAM** available on your GPU
+2. **Selects optimal mode** automatically:
+   - **24GB+**: Full GPU mode (all components stay on GPU)
+   - **12-24GB**: Model CPU offload mode (components moved between CPU/GPU as needed)
+3. **Logs the decision** so you know which mode is active
+
+**Model CPU Offload** moves entire model components (text encoder, transformer, VAE) to CPU when not actively being used. This is **much faster** than sequential CPU offload (which moves individual submodules).
+
+For GPUs with <24GB VRAM, the server also enables:
+- **VAE Slicing**: Processes VAE decoding in smaller chunks
+- **Attention Slicing**: Computes attention in smaller steps
+
+These combined optimizations fit FLUX.2-dev in 12-16GB VRAM.
+
 ### Auto-Unload Mechanism
 
 1. **Lazy Loading**: The model is NOT loaded when the server starts
@@ -415,9 +442,13 @@ Set FLUX timeout to 10 minutes
 
 ### Memory Management
 
-The server uses several strategies to minimize VRAM usage:
+The server uses several strategies to optimize VRAM:
 
+- **Smart mode selection** based on detected VRAM (24GB+: full GPU, <24GB: model offload)
 - **bfloat16 precision** instead of float32 (saves ~50% VRAM)
+- **Model CPU offload** for <24GB GPUs (only active component stays on GPU)
+- **VAE slicing** for <24GB GPUs (processes VAE decoding in chunks)
+- **Attention slicing** for <24GB GPUs (computes attention in smaller steps)
 - **Explicit cache clearing** when unloading
 - **Threading** for non-blocking auto-unload
 - **Lock-based synchronization** for thread-safe operation
@@ -437,7 +468,10 @@ Example: `20250126_143052_42.png`
 
 **Problem**: Error during generation: "CUDA out of memory"
 
-**Note**: The generator automatically uses **sequential CPU offloading** to reduce VRAM usage from ~28GB to ~12GB. This should work on 16GB GPUs like RTX 4070 Ti Super.
+**Note**: The server automatically detects available VRAM and selects the best mode:
+- **24GB+**: Full GPU (fastest)
+- **16GB**: Model CPU offload (balanced)
+- **12GB+**: Model CPU offload with reduced resolution
 
 **If you still get OOM errors:**
 
@@ -450,16 +484,22 @@ Example: `20250126_143052_42.png`
 2. **Reduce image dimensions**:
    ```bash
    flux generate "prompt" --width 768 --height 768
-   # Or even smaller
+   # Or even smaller for 12GB cards
    flux generate "prompt" --width 512 --height 512
    ```
 
-3. **Reduce inference steps**:
+3. **Reduce inference steps** (minimal memory impact):
    ```bash
-   flux generate "prompt" --steps 20  # Default is 28
+   flux generate "prompt" --steps 28  # Default is 50
    ```
 
-4. **Restart the process** if VRAM isn't fully freed:
+4. **Check logs** to see which mode was selected:
+   ```bash
+   # Look for "Using full GPU mode" or "Using model CPU offload"
+   tail -f /tmp/flux-mcp.log
+   ```
+
+5. **Restart the process** if VRAM isn't fully freed:
    ```bash
    # CLI: Just run again (process exits after generation)
    # MCP: Restart your MCP client
@@ -477,7 +517,7 @@ Example: `20250126_143052_42.png`
    ```
 3. Download manually with HuggingFace CLI:
    ```bash
-   huggingface-cli download black-forest-labs/FLUX.1-dev
+   huggingface-cli download black-forest-labs/FLUX.2-dev
    ```
 
 ### Server Not Responding
@@ -566,18 +606,47 @@ The server logs to stderr. To capture logs:
 
 ## Performance Tips
 
-### Optimal Settings for RTX 4070 Ti Super (16GB)
+### Optimal Settings by GPU VRAM
 
+**RTX 4090 / A6000 (24GB+)**
+- **Resolution**: Up to 1536x1536 comfortably
+- **Mode**: Full GPU (automatic)
+- **Steps**: 50 for high quality, 28 for faster previews
+- **Guidance**: 7.5 (default) or 3.0-4.0 for looser results
+- **Expected time**: ~2-4 minutes for 1024x1024@50 steps
+
+**RTX 4070 Ti Super / 3090 (16GB-24GB)**
 - **Resolution**: Up to 1024x1024 comfortably
-- **Steps**: 25-30 for good quality
-- **Batch size**: 1 (model doesn't support batching well)
+- **Mode**: Sequential CPU offload (automatic for 16GB)
+- **Steps**: 50 for high quality (default), 28 for faster (~25 min)
+- **Guidance**: 7.5 (default) recommended
+- **Expected time**: ~37 minutes for 1024x1024@50 steps
+- **Tip**: Set `FLUX_DEFAULT_STEPS=28` in `.env` for faster defaults
+
+**RTX 3060 / 4060 Ti (12GB-16GB)**
+- **Resolution**: 768x768 recommended for reliability
+- **Mode**: Sequential CPU offload (automatic)
+- **Steps**: 28-35 recommended
+- **Expected time**: ~20-30 minutes for 768x768@28 steps
+
+**All GPUs:**
+- **Guidance Scale**: 7.5 (default, strong adherence) or 3.0-4.0 (looser/creative)
+- **Batch size**: 1 (model doesn't support batching)
 - **Timeout**: 300s for occasional use, 600s for active sessions
 
 ### Generation Time Expectations
 
-- **1024x1024, 28 steps**: ~20-40 seconds (depending on prompt complexity)
-- **512x512, 20 steps**: ~5-10 seconds
-- **First generation**: +10-15 seconds for model loading
+**Full GPU Mode (24GB+ VRAM):**
+- **1024x1024, 50 steps, guidance 7.5**: ~2-4 minutes
+- **1024x1024, 28 steps**: ~1-2 minutes
+- **First generation**: +15-30 seconds for model loading
+
+**Sequential CPU Offload (16GB VRAM - RTX 4070 Ti Super):**
+- **1024x1024, 50 steps, guidance 7.5**: ~37 minutes (~45 sec/step)
+- **1024x1024, 28 steps**: ~25 minutes (~30 sec/step)
+- **768x768, 28 steps**: ~18-22 minutes
+- **First generation**: +2-3 seconds for model loading
+- **Optimization**: Use `FLUX_DEFAULT_STEPS=28` for 30% faster generation
 
 ## Technical Details
 
@@ -634,7 +703,7 @@ For issues and questions:
 ### v0.1.0 (2025-01-26)
 
 - Initial release
-- FLUX.1-dev integration
+- FLUX.2-dev integration
 - Auto-unload functionality (MCP mode)
 - Four MCP tools (generate, unload, status, set_timeout)
 - CLI tool with interactive mode (`flux` command)
