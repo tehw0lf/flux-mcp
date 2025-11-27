@@ -4,13 +4,13 @@ A Model Context Protocol (MCP) server and command-line tool for generating image
 
 ## Features
 
-- 🎨 **High-Quality Image Generation** - Uses FLUX.2-dev for state-of-the-art image synthesis
+- 🎨 **Dual Model Support** - FLUX.1-dev (fast previews, 2-5min) and FLUX.2-dev (high quality, 30-40min)
 - ⚡ **Smart VRAM Management** - Automatically selects best strategy based on available VRAM
 - 🔄 **Auto-Unload** - Automatically unloads model after configurable inactivity period (MCP mode)
-- 💾 **Memory Efficient** - Model CPU offload for 16GB GPUs, full GPU mode for 24GB+
+- 💾 **Memory Efficient** - Sequential CPU offload for 16GB GPUs, full GPU mode for 24GB+
 - 🎲 **Reproducible** - Seed-based generation for consistent results
 - 📊 **Status Monitoring** - Check model status and VRAM usage
-- 🔧 **Runtime Configuration** - Adjust timeout without restarting
+- 🔧 **Runtime Configuration** - Adjust timeout and switch models without restarting
 - 🖥️ **Dual Interface** - Use via MCP-compatible applications or command-line (CLI)
 
 ## Quick Start
@@ -45,10 +45,21 @@ For detailed setup and configuration, see the sections below.
 - CUDA toolkit installed
 - PyTorch with CUDA support
 
-**VRAM Modes:**
-- **24GB+** - Full GPU mode (fastest, ~2-4 minutes for 1024x1024)
-- **16GB** - Model CPU offload mode (balanced, ~5-10 minutes for 1024x1024)
-- **12GB** - Model CPU offload mode (slower, may need reduced resolution)
+## Model Comparison
+
+| Model | Use Case | Speed (16GB GPU) | Speed (24GB+ GPU) | Quality | Recommended Steps |
+|-------|----------|------------------|-------------------|---------|-------------------|
+| **FLUX.1-dev** | Fast previews, iteration | 2-5 min | 1-2 min | Good | 4-8 |
+| **FLUX.2-dev** | Production, final output | 30-40 min | 2-4 min | Excellent | 50 (quality) or 28 (faster) |
+
+**When to use which:**
+- **FLUX.1-dev**: Quick iterations, testing prompts, previews, batch generation
+- **FLUX.2-dev**: Final high-quality images, production work, when quality matters most
+
+**VRAM Modes (automatic selection):**
+- **24GB+** - Full GPU mode (fastest, both models < 5 min)
+- **16-24GB** - Model CPU offload mode (balanced)
+- **12-16GB** - Sequential CPU offload mode (slower, FLUX.1-dev recommended)
 
 ## Installation
 
@@ -91,8 +102,12 @@ FLUX_OUTPUT_DIR=/path/to/flux_output
 # Optional: Custom HuggingFace cache directory
 # FLUX_MODEL_CACHE=/path/to/cache
 
-# Default generation parameters (adjust for faster previews)
-# FLUX_DEFAULT_STEPS=50        # Default: 50 (high quality), use 28 for faster
+# Model selection (choose default model)
+# FLUX_MODEL_ID=black-forest-labs/FLUX.1-dev   # Fast previews (2-5 min)
+# FLUX_MODEL_ID=black-forest-labs/FLUX.2-dev   # High quality (default, 30-40 min on 16GB)
+
+# Default generation parameters
+# FLUX_DEFAULT_STEPS=50        # FLUX.2: 50 (quality) or 28 (faster), FLUX.1: 4-8 (fast)
 # FLUX_DEFAULT_GUIDANCE=7.5    # Default: 7.5 (strong adherence), use 3.0-4.0 for looser
 ```
 
@@ -301,11 +316,12 @@ The following tools are available when using this server with any MCP-compatible
 
 ### 1. `generate_image`
 
-Generate an image from a text prompt.
+Generate an image from a text prompt using FLUX.1-dev (fast) or FLUX.2-dev (quality).
 
 **Parameters:**
 - `prompt` (required): Text description of the image
-- `steps` (optional): Number of inference steps (default: 50, range: 20-100)
+- `model` (optional): "flux1-dev" (fast preview) or "flux2-dev" (quality, default)
+- `steps` (optional): Number of inference steps (FLUX.2: 50 default, FLUX.1: 4-8, range: 4-100)
 - `guidance_scale` (optional): Guidance scale (default: 7.5, range: 1.0-10.0)
 - `width` (optional): Image width in pixels (default: 1024, range: 256-2048)
 - `height` (optional): Image height in pixels (default: 1024, range: 256-2048)
@@ -313,11 +329,15 @@ Generate an image from a text prompt.
 
 **Example Usage (natural language with MCP client):**
 ```
-Generate an image of a futuristic cyberpunk city at sunset with neon lights
+Generate a preview image with flux1-dev of a futuristic cyberpunk city at sunset with neon lights
 ```
 
 ```
-Generate an image with seed 42 of a serene mountain landscape with steps=30
+Generate a high quality image with flux2-dev and seed 42 of a serene mountain landscape
+```
+
+```
+Generate a fast preview with flux1-dev using 6 steps: portrait of a cat
 ```
 
 ### 2. `unload_model`
@@ -417,17 +437,18 @@ On model load, the server:
 
 1. **Detects total VRAM** available on your GPU
 2. **Selects optimal mode** automatically:
-   - **24GB+**: Full GPU mode (all components stay on GPU)
-   - **12-24GB**: Model CPU offload mode (components moved between CPU/GPU as needed)
+   - **24GB+**: Full GPU mode (all components stay on GPU, fastest for both models)
+   - **20-24GB**: Model CPU offload mode (balanced, components moved between CPU/GPU as needed)
+   - **12-20GB**: Sequential CPU offload mode (stable, slower but fits in 16GB VRAM)
 3. **Logs the decision** so you know which mode is active
 
-**Model CPU Offload** moves entire model components (text encoder, transformer, VAE) to CPU when not actively being used. This is **much faster** than sequential CPU offload (which moves individual submodules).
+**Sequential CPU Offload** moves entire model components (text encoder, transformer, VAE) to CPU when not actively being used. This is the most stable approach for limited VRAM systems and works reliably with both FLUX.1-dev and FLUX.2-dev.
 
 For GPUs with <24GB VRAM, the server also enables:
-- **VAE Slicing**: Processes VAE decoding in smaller chunks
-- **Attention Slicing**: Computes attention in smaller steps
+- **Memory-efficient attention** (xFormers or PyTorch SDPA)
+- **bfloat16 precision** for ~50% VRAM savings vs float32
 
-These combined optimizations fit FLUX.2-dev in 12-16GB VRAM.
+These optimizations allow both models to run on 12-16GB VRAM. **Note**: The experimental group offload with CUDA streams has been removed due to stability issues - sequential CPU offload is the recommended stable configuration.
 
 ### Auto-Unload Mechanism
 
@@ -444,14 +465,15 @@ These combined optimizations fit FLUX.2-dev in 12-16GB VRAM.
 
 The server uses several strategies to optimize VRAM:
 
-- **Smart mode selection** based on detected VRAM (24GB+: full GPU, <24GB: model offload)
+- **Smart mode selection** based on detected VRAM (24GB+: full GPU, 20-24GB: model CPU offload, <20GB: sequential CPU offload)
 - **bfloat16 precision** instead of float32 (saves ~50% VRAM)
-- **Model CPU offload** for <24GB GPUs (only active component stays on GPU)
-- **VAE slicing** for <24GB GPUs (processes VAE decoding in chunks)
-- **Attention slicing** for <24GB GPUs (computes attention in smaller steps)
+- **Sequential CPU offload** for <20GB GPUs (stable, moves entire model components to CPU when idle)
+- **Memory-efficient attention** (xFormers or PyTorch SDPA for reduced memory usage)
+- **TF32 acceleration** on Ampere+ GPUs for faster matrix operations
 - **Explicit cache clearing** when unloading
 - **Threading** for non-blocking auto-unload
 - **Lock-based synchronization** for thread-safe operation
+- **Dynamic model switching** - can switch between FLUX.1-dev and FLUX.2-dev without restart
 
 ### Output Files
 

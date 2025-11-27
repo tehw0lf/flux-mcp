@@ -22,29 +22,44 @@ logger = logging.getLogger(__name__)
 
 
 class FluxGenerator:
-    """FLUX.2-dev image generator with lazy loading and auto-unload."""
+    """FLUX image generator with lazy loading and auto-unload."""
 
-    def __init__(self, auto_unload: bool = True):
+    def __init__(self, auto_unload: bool = True, model_id: str | None = None):
         """Initialize the generator (model is not loaded yet).
 
         Args:
             auto_unload: Enable automatic model unloading after timeout (default: True)
                         Set to False for CLI usage where process terminates anyway.
+            model_id: Model ID to use (default: from config, usually FLUX.2-dev)
+                     Supported: "black-forest-labs/FLUX.1-dev" (fast), "black-forest-labs/FLUX.2-dev" (quality)
         """
         self.pipeline: Flux2Pipeline | None = None
         self._lock = threading.Lock()
         self._unload_timer: threading.Timer | None = None
         self._last_access: datetime | None = None
         self.auto_unload = auto_unload
-        logger.info(f"FluxGenerator initialized (auto_unload={auto_unload})")
+        self.model_id = model_id or config.model_id
+        self._current_model_id: str | None = None  # Track which model is actually loaded
+        logger.info(f"FluxGenerator initialized (model={self.model_id}, auto_unload={auto_unload})")
 
-    def _load_model(self) -> None:
-        """Load the FLUX model into memory."""
-        if self.pipeline is not None:
-            logger.debug("Model already loaded")
+    def _load_model(self, model_id: str | None = None) -> None:
+        """Load the FLUX model into memory.
+
+        Args:
+            model_id: Optional model ID to load. If different from current, will unload first.
+        """
+        # Determine which model to load
+        target_model = model_id or self.model_id
+
+        # If a different model is loaded, unload it first
+        if self.pipeline is not None and self._current_model_id != target_model:
+            logger.info(f"Switching from {self._current_model_id} to {target_model}")
+            self.unload_model()
+        elif self.pipeline is not None:
+            logger.debug(f"Model {target_model} already loaded")
             return
 
-        logger.info(f"Loading FLUX model: {config.model_id}")
+        logger.info(f"Loading FLUX model: {target_model}")
         start_time = time.time()
 
         # Enable TF32 for faster matmul on Ampere+ GPUs
@@ -54,12 +69,13 @@ class FluxGenerator:
             logger.info("Enabled TF32 for faster matrix operations")
 
         # Load the pipeline with bfloat16 for VRAM efficiency
-        logger.info("Loading FLUX.2-dev with bfloat16 precision")
+        logger.info(f"Loading {target_model} with bfloat16 precision")
         self.pipeline = Flux2Pipeline.from_pretrained(
-            config.model_id,
+            target_model,
             torch_dtype=torch.bfloat16,
             cache_dir=config.model_cache,
         )
+        self._current_model_id = target_model
 
         # Apply memory optimization based on available VRAM
         if torch.cuda.is_available():
@@ -149,6 +165,7 @@ class FluxGenerator:
             # Delete pipeline
             del self.pipeline
             self.pipeline = None
+            self._current_model_id = None
             self._last_access = None
 
             # Free GPU memory
@@ -169,6 +186,7 @@ class FluxGenerator:
         width: int = 1024,
         height: int = 1024,
         seed: int | None = None,
+        model: str | None = None,
         progress_callback: Callable[[int, int], None] | None = None,
     ) -> tuple[Path, int, dict, Image.Image]:
         """Generate an image from a text prompt.
@@ -180,15 +198,20 @@ class FluxGenerator:
             width: Image width in pixels (default: 1024)
             height: Image height in pixels (default: 1024)
             seed: Random seed for reproducibility (default: random)
+            model: Model to use - "flux1-dev" (fast preview) or "flux2-dev" (quality, default)
             progress_callback: Optional callback function(step, total_steps) for progress updates
 
         Returns:
             Tuple of (output_path, seed_used, generation_settings, pil_image)
         """
         with self._lock:
-            # Load model if needed
-            if self.pipeline is None:
-                self._load_model()
+            # Resolve model preset to full model ID
+            model_id = None
+            if model:
+                model_id = config.models.get(model, model)  # Allow preset or full ID
+
+            # Load model if needed (or switch models)
+            self._load_model(model_id)
 
             # Update last access time
             self._last_access = datetime.now()
@@ -242,7 +265,7 @@ class FluxGenerator:
                 "guidance_scale": guidance_scale,
                 "width": width,
                 "height": height,
-                "model": config.model_id,
+                "model": self._current_model_id,
                 "generation_time_seconds": round(gen_time, 2),
                 "timestamp": timestamp_iso,
             }
@@ -255,7 +278,7 @@ class FluxGenerator:
             png_info.add_text("seed", str(seed))
             png_info.add_text("steps", str(steps))
             png_info.add_text("guidance_scale", str(guidance_scale))
-            png_info.add_text("model", config.model_id)
+            png_info.add_text("model", self._current_model_id)
             png_info.add_text("timestamp", timestamp_iso)
 
             # Save image with embedded metadata
@@ -309,6 +332,7 @@ class FluxGenerator:
 
             return {
                 "model_loaded": is_loaded,
+                "current_model": self._current_model_id,
                 "time_until_unload": time_until_unload,
                 "timeout_seconds": config.unload_timeout,
                 "vram_usage": vram_usage,

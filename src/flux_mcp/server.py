@@ -31,11 +31,11 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="generate_image",
             description=(
-                "Generate an image using FLUX.2-dev model. "
-                "Creates high-quality images from text prompts. "
+                "Generate an image using FLUX models. "
+                "Two models available: FLUX.1-dev (fast previews, 4-8 steps) and FLUX.2-dev (high quality, 50 steps). "
                 "Images are saved to the configured output directory. "
-                "Defaults are optimized for maximum quality: 50 steps, guidance_scale 4.0. "
-                "Use lower values (steps=28, guidance_scale=3.0) for faster previews."
+                "For FLUX.2-dev: Use 50 steps + guidance 7.5 for quality, or 28 steps + guidance 3.5 for faster. "
+                "For FLUX.1-dev: Use 4-8 steps for very fast previews."
             ),
             inputSchema={
                 "type": "object",
@@ -44,9 +44,15 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Text description of the image to generate",
                     },
+                    "model": {
+                        "type": "string",
+                        "description": "Model to use: 'flux1-dev' (fast preview, 2-5min) or 'flux2-dev' (quality, 30-40min on 16GB GPU). Default: flux2-dev",
+                        "enum": ["flux1-dev", "flux2-dev"],
+                        "default": "flux2-dev",
+                    },
                     "steps": {
                         "type": "integer",
-                        "description": "Number of inference steps. Default 50 for high quality. Use 28 for faster previews. Range: 20-100",
+                        "description": "Number of inference steps. FLUX.2: 50 (quality) or 28 (faster). FLUX.1: 4-8 (fast). Range: 4-100",
                         "default": 50,
                     },
                     "guidance_scale": {
@@ -124,8 +130,9 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
         if name == "generate_image":
             # Extract parameters
             prompt = arguments["prompt"]
+            model = arguments.get("model", "flux2-dev")
             steps = arguments.get("steps", 50)
-            guidance_scale = arguments.get("guidance_scale", 4.0)
+            guidance_scale = arguments.get("guidance_scale", 7.5)
             width = arguments.get("width", 1024)
             height = arguments.get("height", 1024)
             seed = arguments.get("seed")
@@ -182,9 +189,10 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
                     logger.debug(f"Could not send progress: {e}")
 
             # Generate image with progress reporting
-            logger.info(f"Generating image: {prompt[:50]}...")
+            logger.info(f"Generating image with {model}: {prompt[:50]}...")
             output_path, used_seed, settings, pil_image = generator.generate(
                 prompt=prompt,
+                model=model,
                 steps=steps,
                 guidance_scale=guidance_scale,
                 width=width,
@@ -243,6 +251,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
             if status["model_loaded"]:
                 status_msg = f"""🟢 FLUX Model Status: LOADED
 
+🎨 Current model: {status["current_model"]}
 ⏱️  Time until auto-unload: {status["time_until_unload"]}
 ⚙️  Auto-unload timeout: {status["timeout_seconds"]}s
 📅 Last access: {status["last_access"]}
