@@ -26,9 +26,9 @@ class Config:
         self.model_cache: Path | None = Path(cache_dir) if cache_dir else None
 
         # Model configuration
-        # Supported models:
-        # - FLUX.1-dev: Original FLUX model, faster generation (4-8 steps), good for previews
-        # - FLUX.2-dev: Latest FLUX model, higher quality (50 steps), production use
+        # Supported models (both optimized for quality):
+        # - FLUX.1-dev: Faster quality (40 steps, ~4-8 min on 16GB)
+        # - FLUX.2-dev: Maximum quality (50 steps, ~30-40 min on 16GB)
         self.model_id: str = os.getenv("FLUX_MODEL_ID", "black-forest-labs/FLUX.2-dev")
 
         # Model presets for easy switching

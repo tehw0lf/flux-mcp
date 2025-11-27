@@ -1,10 +1,10 @@
 # FLUX MCP Server & CLI
 
-A Model Context Protocol (MCP) server and command-line tool for generating images using FLUX.2-dev with automatic model unloading to save VRAM and power.
+A Model Context Protocol (MCP) server and command-line tool for generating high-quality images using FLUX.1-dev and FLUX.2-dev with automatic model unloading to save VRAM and power.
 
 ## Features
 
-- 🎨 **Dual Model Support** - FLUX.1-dev (fast previews, 2-5min) and FLUX.2-dev (high quality, 30-40min)
+- 🎨 **Dual Model Support** - FLUX.1-dev (faster quality, 4-8min) and FLUX.2-dev (maximum quality, 30-40min)
 - ⚡ **Smart VRAM Management** - Automatically selects best strategy based on available VRAM
 - 🔄 **Auto-Unload** - Automatically unloads model after configurable inactivity period (MCP mode)
 - 💾 **Memory Efficient** - Sequential CPU offload for 16GB GPUs, full GPU mode for 24GB+
@@ -635,42 +635,41 @@ The server logs to stderr. To capture logs:
 **RTX 4090 / A6000 (24GB+)**
 - **Resolution**: Up to 1536x1536 comfortably
 - **Mode**: Full GPU (automatic)
-- **Steps**: 50 for high quality, 28 for faster previews
-- **Guidance**: 7.5 (default) or 3.0-4.0 for looser results
-- **Expected time**: ~2-4 minutes for 1024x1024@50 steps
+- **FLUX.1-dev**: ~1-2 min (40 steps, quality)
+- **FLUX.2-dev**: ~2-4 min (50 steps, maximum quality)
+- **Guidance**: 7.5 (both models)
 
 **RTX 4070 Ti Super / 3090 (16GB-24GB)**
 - **Resolution**: Up to 1024x1024 comfortably
 - **Mode**: Sequential CPU offload (automatic for 16GB)
-- **Steps**: 50 for high quality (default), 28 for faster (~25 min)
-- **Guidance**: 7.5 (default) recommended
-- **Expected time**: ~37 minutes for 1024x1024@50 steps
-- **Tip**: Set `FLUX_DEFAULT_STEPS=28` in `.env` for faster defaults
+- **FLUX.1-dev**: ~4-8 min (40 steps, quality) ← Recommended for faster workflow
+- **FLUX.2-dev**: ~30-40 min (50 steps, maximum quality)
+- **Guidance**: 7.5 (both models)
 
 **RTX 3060 / 4060 Ti (12GB-16GB)**
-- **Resolution**: 768x768 recommended for reliability
+- **Resolution**: 1024x1024 (FLUX.1) or 768x768 (FLUX.2 for safety)
 - **Mode**: Sequential CPU offload (automatic)
-- **Steps**: 28-35 recommended
-- **Expected time**: ~20-30 minutes for 768x768@28 steps
+- **FLUX.1-dev**: ~6-10 min (40 steps) ← Highly recommended
+- **FLUX.2-dev**: ~40-50 min (50 steps) or reduce to 768x768
+- **Tip**: Use FLUX.1-dev for better speed/quality balance on lower VRAM
 
 **All GPUs:**
-- **Guidance Scale**: 7.5 (default, strong adherence) or 3.0-4.0 (looser/creative)
-- **Batch size**: 1 (model doesn't support batching)
+- **Guidance Scale**: 7.5 (optimal for both models)
+- **Batch size**: 1 (models don't support batching)
 - **Timeout**: 300s for occasional use, 600s for active sessions
 
 ### Generation Time Expectations
 
 **Full GPU Mode (24GB+ VRAM):**
-- **1024x1024, 50 steps, guidance 7.5**: ~2-4 minutes
-- **1024x1024, 28 steps**: ~1-2 minutes
+- **FLUX.1-dev** (40 steps): ~1-2 min for 1024x1024
+- **FLUX.2-dev** (50 steps): ~2-4 min for 1024x1024
 - **First generation**: +15-30 seconds for model loading
 
 **Sequential CPU Offload (16GB VRAM - RTX 4070 Ti Super):**
-- **1024x1024, 50 steps, guidance 7.5**: ~37 minutes (~45 sec/step)
-- **1024x1024, 28 steps**: ~25 minutes (~30 sec/step)
-- **768x768, 28 steps**: ~18-22 minutes
+- **FLUX.1-dev** (40 steps): ~4-8 min for 1024x1024 ← Recommended
+- **FLUX.2-dev** (50 steps): ~30-40 min for 1024x1024
 - **First generation**: +2-3 seconds for model loading
-- **Optimization**: Use `FLUX_DEFAULT_STEPS=28` for 30% faster generation
+- **Optimization**: Use FLUX.1-dev for 5-8x faster generation with excellent quality
 
 ## Technical Details
 

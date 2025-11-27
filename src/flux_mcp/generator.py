@@ -198,7 +198,7 @@ class FluxGenerator:
             width: Image width in pixels (default: 1024)
             height: Image height in pixels (default: 1024)
             seed: Random seed for reproducibility (default: random)
-            model: Model to use - "flux1-dev" (fast preview) or "flux2-dev" (quality, default)
+            model: Model to use - "flux1-dev" (faster quality) or "flux2-dev" (maximum quality, default)
             progress_callback: Optional callback function(step, total_steps) for progress updates
 
         Returns:
