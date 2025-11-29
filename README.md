@@ -273,25 +273,26 @@ Opens the output directory in your file manager (Linux: xdg-open, macOS: open, W
 
 ### Output Files
 
-Generated images are saved with metadata:
+Generated images are saved with embedded metadata:
 
-- **Image:** `flux_YYYYMMDD_HHMMSS_SEED.png`
-- **Metadata:** `flux_YYYYMMDD_HHMMSS_SEED.json`
+- **Image:** `YYYYMMDD_HHMMSS_SEED.png`
+- **Thumbnail:** `YYYYMMDD_HHMMSS_SEED_thumb.png` (512x512 preview)
 
-Metadata JSON contains:
-```json
-{
-  "prompt": "your prompt here",
-  "seed": 42,
-  "steps": 28,
-  "guidance_scale": 3.5,
-  "width": 1024,
-  "height": 1024,
-  "model": "black-forest-labs/FLUX.2-dev",
-  "generation_time_seconds": 15.3,
-  "timestamp": "2025-01-26T12:34:56"
-}
+All generation parameters are embedded directly in the PNG metadata. You can view them with tools like `exiftool`:
+
+```bash
+exiftool image.png
 ```
+
+Embedded metadata includes:
+- `Prompt`: The text prompt used
+- `Seed`: Random seed for reproducibility
+- `Steps`: Number of inference steps
+- `Guidance Scale`: Guidance scale value
+- `Width` / `Height`: Image dimensions
+- `Model`: FLUX model used
+- `Generation Time Seconds`: How long generation took
+- `Timestamp`: When the image was created
 
 ### CLI vs MCP Server
 
@@ -300,7 +301,7 @@ Metadata JSON contains:
 - ✓ Direct control from terminal
 - ✓ Batch generation with interactive mode
 - ✓ No auto-unload (process terminates after generation)
-- ✓ Saves metadata JSON files
+- ✓ Generates thumbnails for quick preview
 - ✓ Rich terminal UI with progress bars
 
 **MCP Server Mode:**
@@ -723,12 +724,26 @@ For issues and questions:
 
 ## Changelog
 
+### v1.0.0 (2025-11-29)
+
+**Stable Release**
+
+- ✨ Dual model support: FLUX.1-dev (faster) and FLUX.2-dev (maximum quality)
+- ✨ Model-specific quality defaults (FLUX.1=40 steps, FLUX.2=50 steps, both at 7.5 guidance)
+- ✨ Smart VRAM optimization for 12-24GB GPUs with automatic mode selection
+- ✨ CLI tool with interactive mode and thumbnail generation
+- ✨ MCP server with auto-unload and progress reporting
+- ✨ Clean metadata embedding in PNG (individual fields, no JSON blobs)
+- ✨ Thumbnail generation for quick previews (512x512)
+- 🐛 Fixed duplicate metadata in PNG files
+- 🐛 Fixed .gitignore for PyTorch checkpoint files
+- 📚 Comprehensive documentation with usage examples
+
 ### v0.1.0 (2025-01-26)
 
-- Initial release
+- Initial development release
 - FLUX.2-dev integration
 - Auto-unload functionality (MCP mode)
 - Four MCP tools (generate, unload, status, set_timeout)
 - CLI tool with interactive mode (`flux` command)
 - Shared architecture between CLI and MCP server
-- Comprehensive documentation with CLI and MCP usage examples

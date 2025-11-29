@@ -34,7 +34,7 @@ def validate_dimensions(ctx, param, value):
 
 
 @click.group()
-@click.version_option(version="0.1.0", prog_name="flux")
+@click.version_option(version="1.0.0", prog_name="flux")
 def cli():
     """FLUX.2-dev CLI - Generate images locally with FLUX."""
     pass
