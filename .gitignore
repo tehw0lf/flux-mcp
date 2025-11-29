@@ -71,4 +71,4 @@ flux_output/
 *.png
 *.jpg
 *.jpeg
-.pt
+*.pt

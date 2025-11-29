@@ -8,6 +8,7 @@ from pathlib import Path
 
 import click
 import torch
+from PIL import Image
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -190,7 +191,7 @@ def _generate_image(
             _task = progress.add_task("Generating...", total=None)
 
             # Generate
-            result_path, used_seed, settings, _pil_image = generator.generate(
+            result_path, used_seed, settings, pil_image = generator.generate(
                 prompt=prompt,
                 steps=steps,
                 guidance_scale=guidance,
@@ -206,26 +207,20 @@ def _generate_image(
             result_path.rename(output_path)
             result_path = output_path
 
-        # Save metadata
-        metadata_path = result_path.with_suffix(".json")
-        metadata = {
-            "prompt": prompt,
-            "seed": used_seed,
-            "steps": steps,
-            "guidance_scale": guidance,
-            "width": width,
-            "height": height,
-            "model": config.model_id,
-            "generation_time_seconds": float(settings["generation_time"].rstrip("s")),
-            "timestamp": datetime.now().isoformat(),
-        }
-        with open(metadata_path, "w") as f:
-            json.dump(metadata, f, indent=2)
+        # Create thumbnail (512x512) for preview
+        thumbnail_size = (512, 512)
+        thumbnail = pil_image.copy()
+        thumbnail.thumbnail(thumbnail_size, Image.Resampling.LANCZOS)
+
+        # Save thumbnail to disk
+        thumb_filename = result_path.stem + "_thumb" + result_path.suffix
+        thumb_path = result_path.parent / thumb_filename
+        thumbnail.save(thumb_path)
 
         # Success output
         console.print("\n[bold green]✓ Image generated successfully![/bold green]\n")
         console.print(f"  📁 Image: {result_path}")
-        console.print(f"  📄 Metadata: {metadata_path}")
+        console.print(f"  🖼️  Thumbnail: {thumb_path}")
         console.print(f"  ⏱️  Generation time: {settings['generation_time']}")
         console.print(f"  🎲 Seed: {used_seed}")
 

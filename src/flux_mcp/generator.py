@@ -271,15 +271,16 @@ class FluxGenerator:
                 "timestamp": timestamp_iso,
             }
 
-            # Create PNG metadata
+            # Create PNG metadata with individual fields only
             png_info = PngInfo()
-            png_info.add_text("parameters", json.dumps(metadata_dict, indent=2))
-            # Add individual fields for compatibility with various tools
             png_info.add_text("prompt", prompt)
             png_info.add_text("seed", str(seed))
             png_info.add_text("steps", str(steps))
             png_info.add_text("guidance_scale", str(guidance_scale))
+            png_info.add_text("width", str(width))
+            png_info.add_text("height", str(height))
             png_info.add_text("model", self._current_model_id)
+            png_info.add_text("generation_time_seconds", str(round(gen_time, 2)))
             png_info.add_text("timestamp", timestamp_iso)
 
             # Save image with embedded metadata
