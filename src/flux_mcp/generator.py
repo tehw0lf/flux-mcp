@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import gc
-import json
 import logging
 import threading
 import time
@@ -12,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 import torch
-from diffusers import Flux2Pipeline
+from diffusers import Flux2Pipeline, FluxPipeline
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
@@ -33,7 +32,7 @@ class FluxGenerator:
             model_id: Model ID to use (default: from config, usually FLUX.2-dev)
                      Supported: "black-forest-labs/FLUX.1-dev" (fast), "black-forest-labs/FLUX.2-dev" (quality)
         """
-        self.pipeline: Flux2Pipeline | None = None
+        self.pipeline: FluxPipeline | Flux2Pipeline | None = None
         self._lock = threading.Lock()
         self._unload_timer: threading.Timer | None = None
         self._last_access: datetime | None = None
@@ -69,8 +68,17 @@ class FluxGenerator:
             logger.info("Enabled TF32 for faster matrix operations")
 
         # Load the pipeline with bfloat16 for VRAM efficiency
-        logger.info(f"Loading {target_model} with bfloat16 precision")
-        self.pipeline = Flux2Pipeline.from_pretrained(
+        # Use the correct pipeline class based on the model
+        if "FLUX.1" in target_model:
+            pipeline_class = FluxPipeline
+            logger.info(f"Loading {target_model} with FluxPipeline (FLUX.1) and bfloat16 precision")
+        else:
+            pipeline_class = Flux2Pipeline
+            logger.info(
+                f"Loading {target_model} with Flux2Pipeline (FLUX.2) and bfloat16 precision"
+            )
+
+        self.pipeline = pipeline_class.from_pretrained(
             target_model,
             torch_dtype=torch.bfloat16,
             cache_dir=config.model_cache,
@@ -257,21 +265,8 @@ class FluxGenerator:
             # Get the generated PIL Image
             pil_image = result.images[0]
 
-            # Prepare metadata
-            timestamp_iso = datetime.now().isoformat()
-            metadata_dict = {
-                "prompt": prompt,
-                "seed": seed,
-                "steps": steps,
-                "guidance_scale": guidance_scale,
-                "width": width,
-                "height": height,
-                "model": self._current_model_id,
-                "generation_time_seconds": round(gen_time, 2),
-                "timestamp": timestamp_iso,
-            }
-
             # Create PNG metadata with individual fields only
+            timestamp_iso = datetime.now().isoformat()
             png_info = PngInfo()
             png_info.add_text("prompt", prompt)
             png_info.add_text("seed", str(seed))
