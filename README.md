@@ -570,6 +570,36 @@ Example: `20250126_143052_42.png`
 3. Close background applications to free GPU resources
 4. Check that CUDA is properly installed
 
+### MCP Timeout False Positives
+
+**Problem**: MCP client shows error "Command failed" or timeout during long FLUX.2-dev generations (30-40 minutes), but image still generates successfully
+
+**Explanation**: Some MCP clients (like Claude Desktop) have shorter timeouts than FLUX.2-dev's generation time. The generation continues running in the background even after the timeout error appears.
+
+**What happens**:
+- MCP client may show an error after ~2-5 minutes
+- Generation continues in the background successfully
+- Image saves to output directory when complete
+- You can check the output directory to find your completed image
+
+**Solutions**:
+1. **Ignore the timeout error** - Check your output directory after the expected generation time
+2. **Use FLUX.1-dev for faster results** - Completes in 4-8 minutes (well within timeout limits)
+3. **Use CLI mode for long generations** - No timeout restrictions:
+   ```bash
+   flux generate "your prompt" --model flux2-dev
+   ```
+4. **Monitor in background**:
+   ```bash
+   # Watch the output directory for new images
+   watch -n 5 ls -lht ~/flux_output | head
+
+   # Or check GPU usage to see if generation is still running
+   watch -n 2 nvidia-smi
+   ```
+
+**Note**: This is a limitation of MCP client timeout settings, not the FLUX MCP server. The server handles long generations correctly.
+
 ### Permission Errors
 
 **Problem**: Cannot write to output directory
@@ -723,6 +753,14 @@ For issues and questions:
 - Open an issue on GitHub
 
 ## Changelog
+
+### v1.1.0 (2025-12-07)
+
+**Improvements & Fixes**
+
+- ✨ Added `--fast` / `-f` flag to CLI for quick FLUX.1-dev generation without environment variables
+- 🐛 Fixed pipeline class selection - FLUX.1-dev now correctly uses FluxPipeline (was causing tokenizer errors)
+- 📚 Added MCP timeout warning documentation for long FLUX.2-dev generations
 
 ### v1.0.0 (2025-11-29)
 
