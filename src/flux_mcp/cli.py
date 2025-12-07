@@ -98,8 +98,14 @@ def cli():
     is_flag=True,
     help="Verbose output with debug info",
 )
+@click.option(
+    "--fast",
+    "-f",
+    is_flag=True,
+    help="Use FLUX.1-dev for faster generation (~4-8 min vs ~30-40 min)",
+)
 def generate(
-    prompt, steps, guidance, width, height, seed, output, output_dir, interactive, verbose
+    prompt, steps, guidance, width, height, seed, output, output_dir, interactive, verbose, fast
 ):
     """Generate an image from a text prompt.
 
@@ -108,6 +114,8 @@ def generate(
         flux generate "a beautiful sunset over mountains"
 
         flux generate "portrait of a cat" --steps 35 --seed 42
+
+        flux generate "cyberpunk city" --fast
 
         flux generate --interactive
     """
@@ -143,6 +151,9 @@ def generate(
         console.print("   or: flux generate --interactive")
         sys.exit(1)
 
+    # Determine model based on --fast flag
+    model = "flux1-dev" if fast else None  # None uses default from config
+
     # Generate image
     _generate_image(
         prompt=prompt,
@@ -153,11 +164,12 @@ def generate(
         seed=seed,
         output_path=output,
         verbose=verbose,
+        model=model,
     )
 
 
 def _generate_image(
-    prompt, steps, guidance, width, height, seed, output_path, verbose, generator=None
+    prompt, steps, guidance, width, height, seed, output_path, verbose, model=None, generator=None
 ):
     """Internal function to generate a single image."""
     # Create generator if not provided (for single-shot mode)
@@ -196,6 +208,7 @@ def _generate_image(
                 width=width,
                 height=height,
                 seed=seed,
+                model=model,
             )
 
         # Handle custom output path
