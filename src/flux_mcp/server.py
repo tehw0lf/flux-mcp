@@ -15,7 +15,8 @@ from .generator import FluxGenerator
 
 # Set up logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,12 @@ async def list_tools() -> list[Tool]:
                 "Generate high-quality images using FLUX models. "
                 "Two models available: FLUX.1-dev (faster, 40 steps default) and FLUX.2-dev (highest quality, 50 steps default). "
                 "Both models are optimized for quality output. "
-                "Images are saved to the configured output directory with embedded metadata."
+                "Images are saved to the configured output directory with embedded metadata. "
+                "IMPORTANT: This tool is LONG-RUNNING and NON-BLOCKING. "
+                "flux1-dev takes ~4-8 min, flux2-dev takes ~30-40 min. "
+                "The MCP client may receive a timeout error - this is EXPECTED and NORMAL. "
+                "Do NOT treat a timeout as a failure. Inform the user that generation is "
+                "running in the background and they should upload the result image when ready."
             ),
             inputSchema={
                 "type": "object",
@@ -140,12 +146,18 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
                 return [TextContent(type="text", text="Error: Prompt cannot be empty")]
 
             if steps < 1 or steps > 100:
-                return [TextContent(type="text", text="Error: Steps must be between 1 and 100")]
+                return [
+                    TextContent(
+                        type="text",
+                        text="Error: Steps must be between 1 and 100",
+                    )
+                ]
 
             if width < 256 or width > 2048 or height < 256 or height > 2048:
                 return [
                     TextContent(
-                        type="text", text="Error: Width and height must be between 256 and 2048"
+                        type="text",
+                        text="Error: Width and height must be between 256 and 2048",
                     )
                 ]
 
@@ -238,7 +250,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
             generator.unload_model()
             return [
                 TextContent(
-                    type="text", text="✅ FLUX model unloaded successfully. GPU memory freed."
+                    type="text",
+                    text="✅ FLUX model unloaded successfully. GPU memory freed.",
                 )
             ]
 
@@ -283,7 +296,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
             if timeout_seconds < 0:
                 return [
                     TextContent(
-                        type="text", text="Error: Timeout must be non-negative (0 to disable)"
+                        type="text",
+                        text="Error: Timeout must be non-negative (0 to disable)",
                     )
                 ]
 
