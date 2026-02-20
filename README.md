@@ -487,6 +487,59 @@ Generated images are saved as:
 
 Example: `20250126_143052_42.png`
 
+## Known Behavior: MCP Timeouts During FLUX.2-dev Generation
+
+When using `generate_image` with `flux2-dev` via an MCP client (e.g. Claude Desktop, Claude Code), the client will likely report a timeout error during generation. **This is expected and normal — it is not a server error.**
+
+### Why the timeout occurs
+
+MCP clients enforce a client-side timeout on tool calls, typically in the range of 1-5 minutes. FLUX.2-dev generation on a 16GB GPU takes 30-40 minutes, which far exceeds any standard MCP client timeout. The server itself does not time out — only the client's wait for a response does.
+
+The `generate_image` tool description explicitly informs the LLM about this behavior so it does not treat the timeout as a failure and does not retry unnecessarily.
+
+### What actually happens
+
+1. The MCP client sends the `generate_image` request to the server
+2. The server starts the generation in a background thread and returns immediately (non-blocking)
+3. The client-side timeout fires after 1-5 minutes — the client shows an error
+4. **Generation continues running in the background** — the server process is unaffected
+5. When generation completes (30-40 min later), the image is saved to the configured output directory automatically
+
+### How to confirm generation is complete
+
+Check the output directory for the new image file:
+
+```bash
+# Watch for new files appearing
+watch -n 10 ls -lht ~/flux_output | head
+
+# Or list files sorted by modification time
+ls -lht ~/flux_output | head
+```
+
+### How to verify generation is still running
+
+```bash
+# Check GPU utilization — should show ~100% during generation
+watch -n 2 nvidia-smi
+
+# Check CPU and process activity
+htop
+```
+
+If `nvidia-smi` shows near-100% GPU utilization, generation is actively running.
+
+### Recommended alternatives for long generations
+
+- **Use FLUX.1-dev** (`flux1-dev`) — completes in 4-8 min on 16GB GPUs, well within MCP timeout limits, and produces excellent quality
+- **Use CLI mode** — no timeout restrictions at all:
+  ```bash
+  flux generate "your prompt" --model flux2-dev
+  ```
+  The CLI runs the generation synchronously and shows a progress bar.
+
+---
+
 ## Troubleshooting
 
 ### CUDA Out of Memory
