@@ -39,6 +39,7 @@ class FluxGenerator:
         self.auto_unload = auto_unload
         self.model_id = model_id or config.model_id
         self._current_model_id: str | None = None  # Track which model is actually loaded
+        self._last_image_id: str | None = None  # Track last generated image stem
         logger.info(f"FluxGenerator initialized (model={self.model_id}, auto_unload={auto_unload})")
 
     def _load_model(self, model_id: str | None = None) -> None:
@@ -280,9 +281,13 @@ class FluxGenerator:
 
             # Save image with embedded metadata
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{timestamp}_{seed}.png"
+            image_id = f"{timestamp}_{seed}"
+            filename = f"{image_id}.png"
             output_path = config.output_dir / filename
             pil_image.save(output_path, pnginfo=png_info)
+
+            # Track last generated image for preview
+            self._last_image_id = image_id
 
             logger.info(f"Image generated in {gen_time:.2f}s: {output_path}")
 
@@ -299,7 +304,29 @@ class FluxGenerator:
                 "generation_time": f"{gen_time:.2f}s",
             }
 
-            return output_path, seed, settings, pil_image
+            return output_path, seed, settings, pil_image, image_id
+
+    def get_preview(self, image_id: str | None = None) -> tuple[Path, Path] | None:
+        """Get the full-size and thumbnail paths for an image.
+
+        Args:
+            image_id: Image ID (filename stem without extension) to retrieve.
+                      If None, returns the last generated image.
+
+        Returns:
+            Tuple of (full_image_path, thumbnail_path), or None if not found.
+        """
+        target_id = image_id or self._last_image_id
+        if target_id is None:
+            return None
+
+        full_path = config.output_dir / f"{target_id}.png"
+        thumb_path = config.output_dir / f"{target_id}_thumb.png"
+
+        if not full_path.exists():
+            return None
+
+        return full_path, thumb_path if thumb_path.exists() else full_path
 
     def get_status(self) -> dict:
         """Get current generator status.

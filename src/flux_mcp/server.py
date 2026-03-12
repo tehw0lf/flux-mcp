@@ -124,6 +124,25 @@ async def list_tools() -> list[Tool]:
                 "required": ["timeout_seconds"],
             },
         ),
+        Tool(
+            name="get_preview",
+            description=(
+                "Retrieve a preview (thumbnail) of a generated image. "
+                "Use this after generate_image completes — especially useful for FLUX.2-dev "
+                "background generations where the MCP client timed out. "
+                "Pass the image_id from generate_image output, or omit to get the last generated image. "
+                "Returns the thumbnail inline and the full-size image path."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "image_id": {
+                        "type": "string",
+                        "description": "Image ID returned by generate_image (e.g. '20250126_143052_42'). Omit to get the last generated image.",
+                    },
+                },
+            },
+        ),
     ]
 
 
@@ -200,7 +219,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
 
             # Generate image with progress reporting
             logger.info(f"Generating image with {model}: {prompt[:50]}...")
-            output_path, used_seed, settings, pil_image = generator.generate(
+            output_path, used_seed, settings, pil_image, image_id = generator.generate(
                 prompt=prompt,
                 model=model,
                 steps=steps,
@@ -232,6 +251,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
 📁 Full-size image: {output_path}
 🖼️  Thumbnail: {thumb_path}
 🎲 Seed: {used_seed}
+🆔 Image ID: {image_id}
 ⚙️ Settings:
   - Steps: {settings["steps"]}
   - Guidance Scale: {settings["guidance_scale"]}
@@ -239,6 +259,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
   - Generation Time: {settings["generation_time"]}
 
 💡 Use the same seed to reproduce this image.
+💡 Use image ID with get_preview to retrieve this image later.
 📌 A {thumbnail_size[0]}x{thumbnail_size[1]} thumbnail is shown below for instant preview.
 """
             return [
@@ -289,6 +310,39 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent | ImageConten
 """
 
             return [TextContent(type="text", text=status_msg)]
+
+        elif name == "get_preview":
+            image_id = arguments.get("image_id")
+            result = generator.get_preview(image_id)
+
+            if result is None:
+                msg = "No image found."
+                if image_id:
+                    msg = f"No image found with ID '{image_id}'."
+                elif generator._last_image_id is None:
+                    msg = "No images have been generated yet in this session."
+                return [TextContent(type="text", text=msg)]
+
+            full_path, thumb_path = result
+
+            # Load thumbnail and encode as base64
+            with Image.open(thumb_path) as thumb_img:
+                buffer = io.BytesIO()
+                thumb_img.save(buffer, format="PNG")
+                thumbnail_data = base64.b64encode(buffer.getvalue()).decode("utf-8")
+                thumb_size = thumb_img.size
+
+            response = f"""Preview retrieved successfully!
+
+📁 Full-size image: {full_path}
+🖼️  Thumbnail: {thumb_path}
+🆔 Image ID: {full_path.stem}
+📐 Thumbnail size: {thumb_size[0]}x{thumb_size[1]}
+"""
+            return [
+                TextContent(type="text", text=response),
+                ImageContent(type="image", data=thumbnail_data, mimeType="image/png"),
+            ]
 
         elif name == "set_timeout":
             timeout_seconds = arguments["timeout_seconds"]
