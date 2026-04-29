@@ -130,14 +130,12 @@ def generate(
         config.output_dir = Path(output_dir)
         config.output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Check CUDA availability
-    if not torch.cuda.is_available():
-        console.print("[red]✗ CUDA not available. GPU required for FLUX.[/red]")
-        console.print("\nPlease ensure:")
-        console.print("  • NVIDIA GPU is installed")
-        console.print("  • CUDA toolkit is installed")
-        console.print("  • PyTorch with CUDA support is installed")
-        sys.exit(1)
+    if torch.cuda.is_available():
+        pass  # CUDA detected, optimal path
+    elif torch.backends.mps.is_available():
+        console.print("[green]✓ Apple Silicon (MPS) detected[/green]")
+    else:
+        console.print("[yellow]⚠ No GPU detected — generation will be very slow on CPU[/yellow]")
 
     # Interactive mode
     if interactive:
@@ -201,7 +199,7 @@ def _generate_image(
             _task = progress.add_task("Generating...", total=None)
 
             # Generate
-            result_path, used_seed, settings, pil_image = generator.generate(
+            result_path, used_seed, settings, pil_image, _image_id = generator.generate(
                 prompt=prompt,
                 steps=steps,
                 guidance_scale=guidance,
@@ -238,10 +236,15 @@ def _generate_image(
         if not verbose:
             console.print(f"\n[dim]Tip: Use --seed {used_seed} to reproduce this image[/dim]")
 
-    except torch.cuda.OutOfMemoryError:
-        console.print("\n[red]✗ Out of VRAM![/red]")
-        console.print("\nTry reducing resolution:")
-        console.print(f"  flux generate '{prompt}' --width 768 --height 768")
+    except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
+        if "out of memory" in str(e).lower():
+            console.print("\n[red]✗ Out of memory![/red]")
+            console.print("\nTry reducing resolution:")
+            console.print(f"  flux generate '{prompt}' --width 768 --height 768")
+            sys.exit(1)
+        console.print(f"\n[red]✗ Error: {e}[/red]")
+        if verbose:
+            console.print_exception()
         sys.exit(1)
     except Exception as e:
         console.print(f"\n[red]✗ Error: {e}[/red]")
@@ -340,20 +343,24 @@ def status():
     table.add_row("Model", config.model_id)
     table.add_row("Output Directory", str(config.output_dir))
 
-    # CUDA info
     if torch.cuda.is_available():
         gpu_name = torch.cuda.get_device_name(0)
         vram_total = torch.cuda.get_device_properties(0).total_memory / (1024**3)
         vram_allocated = torch.cuda.memory_allocated() / (1024**3)
         vram_reserved = torch.cuda.memory_reserved() / (1024**3)
 
-        table.add_row("CUDA Available", "✓ Yes")
+        table.add_row("Device", "CUDA")
         table.add_row("GPU", gpu_name)
         table.add_row("Total VRAM", f"{vram_total:.2f} GB")
         table.add_row("Allocated VRAM", f"{vram_allocated:.2f} GB")
         table.add_row("Reserved VRAM", f"{vram_reserved:.2f} GB")
+    elif torch.backends.mps.is_available():
+        from .generator import _get_available_memory_gb
+
+        table.add_row("Device", "MPS (Apple Silicon)")
+        table.add_row("Available RAM", f"{_get_available_memory_gb():.2f} GB")
     else:
-        table.add_row("CUDA Available", "[red]✗ No[/red]")
+        table.add_row("Device", "[yellow]CPU (no GPU detected)[/yellow]")
 
     # Cache info
     if config.model_cache:

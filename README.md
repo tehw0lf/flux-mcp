@@ -1,25 +1,33 @@
 # FLUX MCP Server & CLI
 
-A Model Context Protocol (MCP) server and command-line tool for generating high-quality images using FLUX.1-dev and FLUX.2-dev with automatic model unloading to save VRAM and power.
+A Model Context Protocol (MCP) server and command-line tool for generating high-quality images using FLUX.1-dev and FLUX.2-dev. Runs on NVIDIA GPUs (CUDA) and Apple Silicon (MPS).
 
 ## Features
 
-- 🎨 **Dual Model Support** - FLUX.1-dev (faster quality, 4-8min) and FLUX.2-dev (maximum quality, 30-40min)
-- ⚡ **Smart VRAM Management** - Automatically selects best strategy based on available VRAM
+- 🎨 **Dual Model Support** - FLUX.1-dev (faster quality, 4-8min on CUDA) and FLUX.2-dev (maximum quality, 30-40min on CUDA)
+- 🍎 **Apple Silicon Support** - Runs on MPS (M1/M2/M3/M4), automatically uses FLUX.1-dev as default
+- ⚡ **Smart Memory Management** - Automatically selects best strategy based on available VRAM (CUDA) or unified memory (MPS)
 - 🔄 **Auto-Unload** - Automatically unloads model after configurable inactivity period (MCP mode)
-- 💾 **Memory Efficient** - Sequential CPU offload for 16GB GPUs, full GPU mode for 24GB+
+- 💾 **Memory Efficient** - Sequential CPU offload for 16GB CUDA GPUs, full GPU mode for 24GB+
 - 🎲 **Reproducible** - Seed-based generation for consistent results
-- 📊 **Status Monitoring** - Check model status and VRAM usage
+- 📊 **Status Monitoring** - Check model status and memory usage
 - 🔧 **Runtime Configuration** - Adjust timeout and switch models without restarting
 - 🖥️ **Dual Interface** - Use via MCP-compatible applications or command-line (CLI)
 - 🖼️ **Preview Tool** - Retrieve generated images by ID after background generation completes
 
 ## Requirements
 
+### NVIDIA GPU (Linux/Windows)
 - Python 3.10+
 - NVIDIA GPU with 12GB+ VRAM (16GB recommended, 24GB+ for maximum speed)
 - CUDA toolkit installed
 - PyTorch with CUDA support
+
+### Apple Silicon (macOS)
+- Python 3.10+
+- Mac with Apple Silicon (M1 or later), 16GB+ unified memory
+- PyTorch 2.4+ (standard PyPI wheel, no CUDA needed)
+- Install with Mac extras: `uv sync --extra mac`
 
 ## Quick Start
 
@@ -215,7 +223,7 @@ flux generate [OPTIONS] PROMPT
 
 **Options:**
 
-- `--steps, -s INTEGER` - Number of inference steps (default: 50)
+- `--steps, -s INTEGER` - Number of inference steps (default: 50 on CUDA, 40 on MPS)
 - `--guidance, -g FLOAT` - Guidance scale (default: 7.5)
 - `--width, -w INTEGER` - Image width in pixels, must be multiple of 8 (default: 1024)
 - `--height, -h INTEGER` - Image height in pixels, must be multiple of 8 (default: 1024)
@@ -688,15 +696,34 @@ If `nvidia-smi` shows near-100% GPU utilization, generation is actively running.
    uv run flux-mcp
    ```
 
+### Apple Silicon (MPS)
+
+**Setup**: Install with Mac extras to get `psutil` for unified memory reporting:
+```bash
+uv sync --extra mac
+```
+
+**Default model on Mac**: FLUX.1-dev (auto-selected — FLUX.2-dev requires more unified memory than most Macs have available alongside macOS).
+
+**Out of memory on Mac**: Run `sudo purge` to free RAM after other heavy processes, then retry with reduced resolution:
+```bash
+flux generate "prompt" --width 768 --height 768
+```
+
+**Check GPU activity on Mac**:
+```bash
+sudo powermetrics --samplers gpu_power -n 1 2>/dev/null | grep "GPU HW active residency"
+```
+
 ### Slow Generation
 
 **Problem**: Image generation takes too long
 
 **Solutions**:
 1. Reduce `steps` parameter (try 20-25 instead of 28)
-2. Ensure GPU is being used (check with `nvidia-smi`)
-3. Close background applications to free GPU resources
-4. Check that CUDA is properly installed
+2. Ensure GPU is being used (CUDA: `nvidia-smi`, MPS: see above)
+3. Close background applications to free GPU/RAM resources
+4. Check that CUDA is properly installed (Linux/Windows)
 
 ### MCP Timeout False Positives
 
@@ -737,7 +764,7 @@ flux-mcp/
 
 ### Key Components
 
-- **FluxGenerator**: Manages model lifecycle, threading, and GPU memory (shared between CLI and MCP)
+- **FluxGenerator**: Manages model lifecycle, threading, and device memory — auto-detects CUDA/MPS/CPU (shared between CLI and MCP)
 - **Config**: Loads environment variables and provides defaults (shared)
 - **MCP Server**: Exposes tools via Model Context Protocol for MCP-compatible clients
 - **CLI Tool**: Direct command-line interface for offline usage

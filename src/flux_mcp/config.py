@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 
+import torch
 from dotenv import load_dotenv
 
 # Load environment variables from .env file if it exists
@@ -19,19 +20,18 @@ class Config:
 
         # Output directory for generated images
         output_dir = os.getenv("FLUX_OUTPUT_DIR", str(Path.home() / "flux_output"))
-        self.output_dir: Path = Path(output_dir)
+        self.output_dir: Path = Path(output_dir).expanduser()
 
         # HuggingFace model cache directory (optional)
         cache_dir = os.getenv("FLUX_MODEL_CACHE")
-        self.model_cache: Path | None = Path(cache_dir) if cache_dir else None
+        self.model_cache: Path | None = Path(cache_dir).expanduser() if cache_dir else None
 
-        # Model configuration
-        # Supported models (both optimized for quality):
-        # - FLUX.1-dev: Faster quality (40 steps, ~4-8 min on 16GB)
-        # - FLUX.2-dev: Maximum quality (50 steps, ~30-40 min on 16GB)
-        self.model_id: str = os.getenv("FLUX_MODEL_ID", "black-forest-labs/FLUX.2-dev")
+        # On MPS (Apple Silicon) default to FLUX.1-dev — FLUX.2-dev exceeds typical unified memory.
+        # On CUDA default to FLUX.2-dev for maximum quality.
+        _mps = not torch.cuda.is_available() and torch.backends.mps.is_available()
+        _default_model = "black-forest-labs/FLUX.1-dev" if _mps else "black-forest-labs/FLUX.2-dev"
+        self.model_id: str = os.getenv("FLUX_MODEL_ID", _default_model)
 
-        # Model presets for easy switching
         self.models = {
             "flux1-dev": "black-forest-labs/FLUX.1-dev",
             "flux2-dev": "black-forest-labs/FLUX.2-dev",
@@ -44,9 +44,7 @@ class Config:
             "black-forest-labs/FLUX.2-dev": {"steps": 50, "guidance": 7.5},
         }
 
-        # Default generation parameters (can be overridden via env vars)
-        # Falls back to FLUX.2-dev defaults if not specified
-        self.default_steps: int = int(os.getenv("FLUX_DEFAULT_STEPS", "50"))
+        self.default_steps: int = int(os.getenv("FLUX_DEFAULT_STEPS", "40" if _mps else "50"))
         self.default_guidance: float = float(os.getenv("FLUX_DEFAULT_GUIDANCE", "7.5"))
 
         # Ensure output directory exists

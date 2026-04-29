@@ -20,6 +20,16 @@ from .config import config
 logger = logging.getLogger(__name__)
 
 
+def _get_available_memory_gb() -> float:
+    """Return available system RAM in GB (proxy for MPS unified memory)."""
+    try:
+        import psutil
+
+        return psutil.virtual_memory().available / (1024**3)
+    except ImportError:
+        return 32.0
+
+
 class FluxGenerator:
     """FLUX image generator with lazy loading and auto-unload."""
 
@@ -40,7 +50,15 @@ class FluxGenerator:
         self.model_id = model_id or config.model_id
         self._current_model_id: str | None = None  # Track which model is actually loaded
         self._last_image_id: str | None = None  # Track last generated image stem
-        logger.info(f"FluxGenerator initialized (model={self.model_id}, auto_unload={auto_unload})")
+        if torch.cuda.is_available():
+            self._device = "cuda"
+        elif torch.backends.mps.is_available():
+            self._device = "mps"
+        else:
+            self._device = "cpu"
+        logger.info(
+            f"FluxGenerator initialized (model={self.model_id}, device={self._device}, auto_unload={auto_unload})"
+        )
 
     def _load_model(self, model_id: str | None = None) -> None:
         """Load the FLUX model into memory.
@@ -79,9 +97,10 @@ class FluxGenerator:
                 f"Loading {target_model} with Flux2Pipeline (FLUX.2) and bfloat16 precision"
             )
 
+        dtype = torch.float16 if self._device == "mps" else torch.bfloat16
         self.pipeline = pipeline_class.from_pretrained(
             target_model,
-            torch_dtype=torch.bfloat16,
+            torch_dtype=dtype,
             cache_dir=config.model_cache,
         )
         self._current_model_id = target_model
@@ -122,8 +141,15 @@ class FluxGenerator:
                         logger.info("No accelerated attention available")
                 except Exception:
                     logger.info("Using default attention mechanism")
+        elif self._device == "mps":
+            available_gb = _get_available_memory_gb()
+            logger.info(f"Apple Silicon (MPS) — {available_gb:.1f}GB unified memory available")
+            self.pipeline.to("mps")
+            if hasattr(torch.nn.functional, "scaled_dot_product_attention"):
+                logger.info("Using PyTorch SDPA on MPS")
         else:
-            logger.warning("CUDA not available - loading to CPU (very slow)")
+            logger.warning("No GPU detected — loading to CPU (very slow)")
+            self.pipeline.to("cpu")
 
         load_time = time.time() - start_time
         logger.info(f"Model loaded successfully in {load_time:.2f}s")
@@ -177,15 +203,14 @@ class FluxGenerator:
             self._current_model_id = None
             self._last_access = None
 
-            # Free GPU memory
-            if torch.cuda.is_available():
+            if self._device == "cuda":
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
+            elif self._device == "mps":
+                torch.mps.empty_cache()
 
-            # Python garbage collection
             gc.collect()
-
-            logger.info("Model unloaded and GPU cache cleared")
+            logger.info(f"Model unloaded and {self._device} cache cleared")
 
     def generate(
         self,
@@ -232,16 +257,16 @@ class FluxGenerator:
             if guidance_scale is None:
                 guidance_scale = current_model_defaults.get("guidance", config.default_guidance)
 
-            # Generate random seed if not provided
             if seed is None:
-                seed = torch.randint(0, 2**32 - 1, (1,)).item()
+                seed = torch.randint(0, 2**32 - 1, (1,), device="cpu").item()
 
             logger.info(
                 f"Generating image with seed={seed}, steps={steps}, guidance={guidance_scale}"
             )
 
-            # Set up generator for reproducibility
-            generator = torch.Generator(device="cuda").manual_seed(seed)
+            # CPU generator for MPS compatibility; CUDA can use device generator
+            gen_device = "cuda" if self._device == "cuda" else "cpu"
+            generator = torch.Generator(device=gen_device).manual_seed(seed)
 
             # Create callback wrapper for diffusers pipeline
             def step_callback(pipe, step_index, timestep, callback_kwargs):
@@ -261,9 +286,10 @@ class FluxGenerator:
                 generator=generator,
                 callback_on_step_end=step_callback if progress_callback else None,
             )
+            if self._device == "mps":
+                torch.mps.synchronize()
             gen_time = time.time() - start_time
 
-            # Get the generated PIL Image
             pil_image = result.images[0]
 
             # Create PNG metadata with individual fields only
@@ -344,19 +370,23 @@ class FluxGenerator:
                 remaining = max(0, config.unload_timeout - elapsed)
                 time_until_unload = f"{remaining:.1f}s"
 
-            # Get VRAM usage if possible
             vram_usage = None
-            if torch.cuda.is_available():
-                allocated = torch.cuda.memory_allocated() / (1024**3)  # GB
-                reserved = torch.cuda.memory_reserved() / (1024**3)  # GB
+            if self._device == "cuda" and torch.cuda.is_available():
+                allocated = torch.cuda.memory_allocated() / (1024**3)
+                reserved = torch.cuda.memory_reserved() / (1024**3)
                 vram_usage = {
                     "allocated_gb": f"{allocated:.2f}",
                     "reserved_gb": f"{reserved:.2f}",
+                }
+            elif self._device == "mps":
+                vram_usage = {
+                    "available_unified_gb": f"{_get_available_memory_gb():.2f}",
                 }
 
             return {
                 "model_loaded": is_loaded,
                 "current_model": self._current_model_id,
+                "device": self._device,
                 "time_until_unload": time_until_unload,
                 "timeout_seconds": config.unload_timeout,
                 "vram_usage": vram_usage,
