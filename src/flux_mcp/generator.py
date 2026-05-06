@@ -52,12 +52,17 @@ class FluxGenerator:
         self._last_image_id: str | None = None  # Track last generated image stem
         if torch.cuda.is_available():
             self._device = "cuda"
+            # ROCm exposes itself via the CUDA API; detect it for accurate logging
+            self._is_rocm = hasattr(torch.version, "hip") and torch.version.hip is not None
         elif torch.backends.mps.is_available():
             self._device = "mps"
+            self._is_rocm = False
         else:
             self._device = "cpu"
+            self._is_rocm = False
+        backend = "ROCm" if self._is_rocm else self._device.upper()
         logger.info(
-            f"FluxGenerator initialized (model={self.model_id}, device={self._device}, auto_unload={auto_unload})"
+            f"FluxGenerator initialized (model={self.model_id}, device={backend}, auto_unload={auto_unload})"
         )
 
     def _load_model(self, model_id: str | None = None) -> None:
@@ -80,8 +85,8 @@ class FluxGenerator:
         logger.info(f"Loading FLUX model: {target_model}")
         start_time = time.time()
 
-        # Enable TF32 for faster matmul on Ampere+ GPUs
-        if torch.cuda.is_available():
+        # Enable TF32 for faster matmul on Ampere+ NVIDIA GPUs (no-op on ROCm)
+        if torch.cuda.is_available() and not self._is_rocm:
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
             logger.info("Enabled TF32 for faster matrix operations")
@@ -108,7 +113,8 @@ class FluxGenerator:
         # Apply memory optimization based on available VRAM
         if torch.cuda.is_available():
             total_vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-            logger.info(f"Detected {total_vram_gb:.1f}GB VRAM")
+            backend_name = "ROCm" if self._is_rocm else "CUDA"
+            logger.info(f"Detected {total_vram_gb:.1f}GB VRAM ({backend_name})")
 
             # VRAM requirements for FLUX.2-dev with bfloat16:
             # - Full GPU: ~28GB (fastest)
@@ -264,8 +270,8 @@ class FluxGenerator:
                 f"Generating image with seed={seed}, steps={steps}, guidance={guidance_scale}"
             )
 
-            # CPU generator for MPS compatibility; CUDA can use device generator
-            gen_device = "cuda" if self._device == "cuda" else "cpu"
+            # ROCm requires a CPU generator (same limitation as MPS)
+            gen_device = "cuda" if (self._device == "cuda" and not self._is_rocm) else "cpu"
             generator = torch.Generator(device=gen_device).manual_seed(seed)
 
             # Create callback wrapper for diffusers pipeline

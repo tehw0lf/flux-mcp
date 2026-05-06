@@ -1,10 +1,11 @@
 # FLUX MCP Server & CLI
 
-A Model Context Protocol (MCP) server and command-line tool for generating high-quality images using FLUX.1-dev and FLUX.2-dev. Runs on NVIDIA GPUs (CUDA) and Apple Silicon (MPS).
+A Model Context Protocol (MCP) server and command-line tool for generating high-quality images using FLUX.1-dev and FLUX.2-dev. Runs on NVIDIA GPUs (CUDA), AMD GPUs (ROCm), and Apple Silicon (MPS).
 
 ## Features
 
 - 🎨 **Dual Model Support** - FLUX.1-dev (faster quality, 4-8min on CUDA) and FLUX.2-dev (maximum quality, 30-40min on CUDA)
+- 🔴 **AMD GPU Support** - Runs on ROCm (RX 6000/7000 series and RDNA2+ recommended), same VRAM tiers as CUDA
 - 🍎 **Apple Silicon Support** - Runs on MPS (M1/M2/M3/M4), automatically uses FLUX.1-dev as default
 - ⚡ **Smart Memory Management** - Automatically selects best strategy based on available VRAM (CUDA) or unified memory (MPS)
 - 🔄 **Auto-Unload** - Automatically unloads model after configurable inactivity period (MCP mode)
@@ -22,6 +23,12 @@ A Model Context Protocol (MCP) server and command-line tool for generating high-
 - NVIDIA GPU with 12GB+ VRAM (16GB recommended, 24GB+ for maximum speed)
 - CUDA toolkit installed
 - PyTorch with CUDA support
+
+### AMD GPU / ROCm (Linux)
+- Python 3.10+
+- AMD GPU with ROCm support (RDNA2+ / RX 6000 series or newer recommended), 12GB+ VRAM
+- ROCm toolkit installed (5.7+)
+- PyTorch with ROCm support (see [AMD/ROCm Installation](#amdrocm-installation) below)
 
 ### Apple Silicon (macOS)
 - Python 3.10+
@@ -695,6 +702,42 @@ If `nvidia-smi` shows near-100% GPU utilization, generation is actively running.
    cd /path/to/flux-mcp
    uv run flux-mcp
    ```
+
+### AMD/ROCm Installation
+
+ROCm support works through PyTorch's ROCm build, which exposes itself via the standard CUDA API — no code changes are needed. The only requirement is installing the ROCm-enabled PyTorch wheel before running `uv sync`.
+
+**Step 1: Install ROCm PyTorch** (replace `rocm6.2` with your installed ROCm version):
+
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/rocm6.2
+```
+
+**Step 2: Install remaining dependencies**:
+
+```bash
+uv sync --extra rocm
+```
+
+**Verify ROCm is detected**:
+
+```bash
+python -c "import torch; print(torch.cuda.is_available(), torch.version.hip)"
+# Should print: True  <rocm-version>
+```
+
+**Check GPU activity on AMD**:
+
+```bash
+rocm-smi
+```
+
+**Notes**:
+- ROCm 5.7+ is recommended; earlier versions may have stability issues with bfloat16
+- xFormers is generally not available on ROCm — the server falls back to PyTorch SDPA automatically
+- TF32 is an NVIDIA-only feature and is automatically skipped on ROCm
+- Random seed generation uses a CPU generator on ROCm (same as MPS) for compatibility
+- VRAM tier selection (full GPU / model offload / sequential offload) works identically to CUDA
 
 ### Apple Silicon (MPS)
 

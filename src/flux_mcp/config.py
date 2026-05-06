@@ -27,7 +27,7 @@ class Config:
         self.model_cache: Path | None = Path(cache_dir).expanduser() if cache_dir else None
 
         # On MPS (Apple Silicon) default to FLUX.1-dev — FLUX.2-dev exceeds typical unified memory.
-        # On CUDA default to FLUX.2-dev for maximum quality.
+        # On CUDA/ROCm default to FLUX.2-dev for maximum quality.
         _mps = not torch.cuda.is_available() and torch.backends.mps.is_available()
         _default_model = "black-forest-labs/FLUX.1-dev" if _mps else "black-forest-labs/FLUX.2-dev"
         self.model_id: str = os.getenv("FLUX_MODEL_ID", _default_model)
