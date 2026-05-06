@@ -131,7 +131,9 @@ def generate(
         config.output_dir.mkdir(parents=True, exist_ok=True)
 
     if torch.cuda.is_available():
-        pass  # CUDA detected, optimal path
+        is_rocm = hasattr(torch.version, "hip") and torch.version.hip is not None
+        if is_rocm:
+            console.print(f"[green]✓ AMD GPU (ROCm {torch.version.hip}) detected[/green]")
     elif torch.backends.mps.is_available():
         console.print("[green]✓ Apple Silicon (MPS) detected[/green]")
     else:
@@ -349,7 +351,9 @@ def status():
         vram_allocated = torch.cuda.memory_allocated() / (1024**3)
         vram_reserved = torch.cuda.memory_reserved() / (1024**3)
 
-        table.add_row("Device", "CUDA")
+        is_rocm = hasattr(torch.version, "hip") and torch.version.hip is not None
+        backend_label = f"ROCm {torch.version.hip}" if is_rocm else "CUDA"
+        table.add_row("Device", backend_label)
         table.add_row("GPU", gpu_name)
         table.add_row("Total VRAM", f"{vram_total:.2f} GB")
         table.add_row("Allocated VRAM", f"{vram_allocated:.2f} GB")

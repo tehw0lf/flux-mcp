@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flux-mcp"
-version = "2.0.0"
+version = "2.1.0"
 description = "MCP Server for FLUX image generation with dual model support and auto-unload"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -40,6 +40,9 @@ dependencies = [
 mac = [
     "psutil>=6.0.0",
 ]
+# ROCm: PyTorch with ROCm support must be installed separately before uv sync --extra rocm.
+# See README for the exact pip install command matching your ROCm version.
+rocm = []
 dev = [
     "pytest>=9.0.3",
     "ruff>=0.6.0",

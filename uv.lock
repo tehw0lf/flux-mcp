@@ -369,7 +369,7 @@ wheels = [
 
 [[package]]
 name = "flux-mcp"
-version = "2.0.0"
+version = "2.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "accelerate" },
@@ -414,7 +414,7 @@ requires-dist = [
     { name = "torch", specifier = ">=2.4.0" },
     { name = "transformers", specifier = ">=4.44.0" },
 ]
-provides-extras = ["mac", "dev"]
+provides-extras = ["mac", "rocm", "dev"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "ruff", specifier = ">=0.14.2" }]
